@@ -18,7 +18,11 @@ const REPORT_FIELDS = [
   "status",
   "hireDate",
   "payRate",
+  "payRateCurrency",
+  "payType",
 ];
+
+const STANDARD_ANNUAL_HOURS = 2080; // 40 hrs/week * 52 weeks — used to convert salaried pay to an hourly equivalent
 
 // Current pay period. In production this should come from the pay schedule
 // (BambooHR "Time Off" / your payroll calendar) rather than being fixed —
@@ -50,16 +54,24 @@ async function fetchDirectoryWithCompensation() {
     departmentGroup: departmentGroupFor(row.department),
     status: row.status === "Active" ? "Active" : row.status || "Inactive",
     hireDate: row.hireDate || null,
-    // payRate typically comes back as "18.00" with a separate payRateCurrency,
-    // or as "18.00 USD" depending on account config — handle both.
-    baseRate: parsePayRate(row.payRate),
+    payType: row.payType || "Hourly",
+    // payRate comes back as e.g. "18.00" (hourly) or "85,000.00" (annual,
+    // when payType is Salary/Yearly) — normalize both to an hourly rate so
+    // downstream labor-cost math is consistent regardless of pay type.
+    baseRate: parsePayRate(row.payRate, row.payType),
   }));
 }
 
-function parsePayRate(value) {
+function parsePayRate(value, payType) {
   if (value == null) return 0;
-  const match = String(value).match(/[\d.]+/);
-  return match ? parseFloat(match[0]) : 0;
+  // Strip thousands separators before matching, or "175,000.00" would be
+  // truncated to "175" at the first comma.
+  const cleaned = String(value).replace(/,/g, "");
+  const match = cleaned.match(/[\d.]+/);
+  const amount = match ? parseFloat(match[0]) : 0;
+
+  const isSalaried = /salary|year|annual/i.test(payType || "");
+  return isSalaried ? round2(amount / STANDARD_ANNUAL_HOURS) : amount;
 }
 
 /**
