@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f0f4f8;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --sidebar-bg: #0f2044;
+  --sidebar-hover: #1e3a5f;
+  --sidebar-active: #2563eb;
+  --sidebar-text: #94a3b8;
+  --sidebar-text-active: #ffffff;
+  --border: #e2e8f0;
+  --positive: #16a34a;
+  --negative: #dc2626;
+  --warning: #d97706;
+}
+
+* { box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, sans-serif; background: var(--background); color: #0f172a; margin: 0; padding: 0; }
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+/* Mobile bottom nav bar */
+.mobile-nav {
+  display: none;
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: #0f2044;
+  border-top: 1px solid #1e3a5f;
+  z-index: 100;
+  padding: 8px 0 env(safe-area-inset-bottom, 8px);
+}
+
+/* Responsive grid helpers */
+.grid-kpi-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.grid-kpi-6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+.grid-2col  { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid-3col  { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.grid-chart-2 { display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; }
+
+/* Scrollable table wrapper */
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+@media (max-width: 768px) {
+  .desktop-sidebar { display: none !important; }
+  .mobile-nav { display: flex; }
+
+  .grid-kpi-4 { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .grid-kpi-6 { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .grid-2col  { grid-template-columns: 1fr; gap: 12px; }
+  .grid-3col  { grid-template-columns: 1fr; gap: 12px; }
+  .grid-chart-2 { grid-template-columns: 1fr; gap: 12px; }
+
+  .hide-mobile { display: none !important; }
+  .main-content { padding: 12px !important; padding-bottom: 80px !important; }
+  .header-search { display: none !important; }
+  .header-daterange { display: none !important; }
+  .header-user-label { display: none !important; }
+  .header-help { display: none !important; }
+}
+
+@media (max-width: 480px) {
+  .grid-kpi-4 { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .grid-kpi-6 { grid-template-columns: 1fr 1fr; gap: 8px; }
+}
