@@ -4,22 +4,12 @@ import Header from "@/components/Header";
 import { useFilteredPayrollDataset } from "@/hooks/useFilteredPayrollDataset";
 import { useDateRange, formatDateRangeLabel } from "@/contexts/DateRangeContext";
 import { DataStateBanner } from "@/components/DataStateBanner";
-import { SkeletonKpiCard, SkeletonTableRows } from "@/components/Skeleton";
+import { SkeletonKpiCard, SkeletonTableRows, SkeletonBlock } from "@/components/Skeleton";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
+import { useWeeklyTrend } from "@/hooks/useWeeklyTrend";
 
 const DEPT_COLORS = { Management: "#1e40af", "Front Desk": "#2563eb", Sales: "#7c3aed", "Night Auditor": "#0891b2", Housekeeping: "#059669", Maintenance: "#d97706" };
-
-// Historical weekly trend by group — not a BambooHR concept (no payroll-trend
-// endpoint), kept as illustrative static context alongside the live table above.
-const weeklyTrend = [
-  { week: "Mar 16", management: 3200, frontDesk: 4800, sales: 2100, housekeeping: 2800, maintenance: 1400, nightAudit: 850 },
-  { week: "Mar 23", management: 3310, frontDesk: 4950, sales: 2206, housekeeping: 2900, maintenance: 1450, nightAudit: 820 },
-  { week: "Mar 30", management: 3150, frontDesk: 4700, sales: 2100, housekeeping: 2750, maintenance: 1380, nightAudit: 810 },
-  { week: "Apr 6",  management: 3280, frontDesk: 4850, sales: 2200, housekeeping: 2850, maintenance: 1500, nightAudit: 840 },
-  { week: "Apr 13", management: 3300, frontDesk: 4900, sales: 2180, housekeeping: 2820, maintenance: 1420, nightAudit: 800 },
-  { week: "Apr 20", management: 3310, frontDesk: 4680, sales: 2206, housekeeping: 2850, maintenance: 1540, nightAudit: 800 },
-  { week: "Apr 27", management: 3310, frontDesk: 4679, sales: 2206, housekeeping: 2795, maintenance: 1543, nightAudit: 802 },
-];
+const FALLBACK_COLORS = ["#0891b2", "#be185d", "#65a30d", "#9333ea", "#ea580c", "#0d9488"];
 
 export default function DepartmentsPage() {
   const { data, loading, error, retry, locations, location } = useFilteredPayrollDataset();
@@ -27,6 +17,7 @@ export default function DepartmentsPage() {
   const departmentTotals = data?.departmentTotals ?? [];
   const employees = data?.employees ?? [];
   const GRAND_TOTAL = data?.grandTotal || 1; // avoid div-by-zero while loading
+  const { chartData: trendData, groups: trendGroups, loading: trendLoading, error: trendError } = useWeeklyTrend(6);
 
   const groupedData = Object.values(
     departmentTotals.reduce((acc, d) => {
@@ -99,22 +90,25 @@ export default function DepartmentsPage() {
 
           <div style={{ background: "white", borderRadius: 8, border: "1px solid #e2e8f0", padding: 14 }}>
             <div style={{ fontWeight: 700, fontSize: 13, color: "#0f172a", marginBottom: 2 }}>Weekly Payroll Trend</div>
-            <div style={{ fontSize: 10, color: "#64748b", marginBottom: 10 }}>7 Weeks by Department</div>
+            <div style={{ fontSize: 10, color: "#64748b", marginBottom: 10 }}>Last 6 weeks by department — live, updates with location/date filters</div>
+            {trendLoading ? (
+              <SkeletonBlock height={200} />
+            ) : trendError ? (
+              <div style={{ fontSize: 11, color: "#b91c1c", padding: "20px 0" }}>{trendError}</div>
+            ) : (
             <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={weeklyTrend}>
+              <LineChart data={trendData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="week" tick={{ fontSize: 9 }} />
-                <YAxis tick={{ fontSize: 9 }} tickFormatter={v => "$" + (v / 1000).toFixed(0) + "k"} />
+                <YAxis tick={{ fontSize: 9 }} tickFormatter={v => "$" + (v / 1000).toFixed(1) + "k"} />
                 <Tooltip formatter={v => ["$" + v.toLocaleString()]} />
                 <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-                <Line type="monotone" dataKey="frontDesk"   stroke="#2563eb" strokeWidth={2} dot={false} name="Front Desk" />
-                <Line type="monotone" dataKey="management"  stroke="#1e40af" strokeWidth={2} dot={false} name="Management" />
-                <Line type="monotone" dataKey="housekeeping"stroke="#059669" strokeWidth={2} dot={false} name="Housekeeping" />
-                <Line type="monotone" dataKey="sales"       stroke="#7c3aed" strokeWidth={1.5} dot={false} name="Sales" />
-                <Line type="monotone" dataKey="maintenance" stroke="#d97706" strokeWidth={1.5} dot={false} name="Maintenance" />
-                <Line type="monotone" dataKey="nightAudit"  stroke="#0891b2" strokeWidth={1.5} dot={false} name="Night Audit" />
+                {trendGroups.map((g, i) => (
+                  <Line key={g.key} type="monotone" dataKey={g.key} stroke={DEPT_COLORS[g.name] || FALLBACK_COLORS[i % FALLBACK_COLORS.length]} strokeWidth={2} dot={false} name={g.name} />
+                ))}
               </LineChart>
             </ResponsiveContainer>
+            )}
           </div>
         </div>
 

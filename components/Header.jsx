@@ -194,7 +194,7 @@ export default function Header({ title, subtitle, locations }) {
                 </label>
                 <button onClick={() => { resetToCurrentWeek(); setPickerOpen(false); }}
                   style={{ marginTop: 2, padding: "5px 8px", border: "1px solid #dbeafe", borderRadius: 5, background: "#eff6ff", color: "#1d4ed8", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
-                  Reset to default range
+                  Reset to last week
                 </button>
                 <button onClick={() => setPickerOpen(false)}
                   style={{ padding: "5px 8px", border: "1px solid #e2e8f0", borderRadius: 5, background: "white", color: "#475569", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>

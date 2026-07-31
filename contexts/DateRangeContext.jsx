@@ -7,13 +7,23 @@ function toISODate(d) {
   return d.toISOString().slice(0, 10);
 }
 
-// Default: July 1, 2026 through today (real "today", not fixed) — the
-// range requested for reviewing this period's data. Use the header date
-// picker to view a different range; "Reset" below returns to this default.
+// Default: the Mon–Sun week immediately before the current one (i.e. "last
+// week"), computed from today's real date. Use the header date picker to
+// view a different range; "Reset" below returns to this default.
 function defaultRange() {
-  const start = "2026-07-01";
-  const end = toISODate(new Date());
-  return { start, end };
+  const now = new Date();
+  const day = now.getDay(); // 0 = Sun
+  const diffToThisMonday = day === 0 ? -6 : 1 - day;
+  const thisMonday = new Date(now);
+  thisMonday.setDate(now.getDate() + diffToThisMonday);
+  thisMonday.setHours(0, 0, 0, 0);
+
+  const lastMonday = new Date(thisMonday);
+  lastMonday.setDate(thisMonday.getDate() - 7);
+  const lastSunday = new Date(lastMonday);
+  lastSunday.setDate(lastMonday.getDate() + 6);
+
+  return { start: toISODate(lastMonday), end: toISODate(lastSunday) };
 }
 
 export function DateRangeProvider({ children }) {

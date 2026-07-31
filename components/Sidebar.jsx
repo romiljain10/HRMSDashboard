@@ -42,16 +42,14 @@ export default function Sidebar() {
         flexShrink: 0,
       }}>
         {/* Logo */}
-        <div style={{ padding: collapsed ? "16px 12px" : "16px 18px", borderBottom: "1px solid #1e3a5f", display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ background: "#2563eb", borderRadius: 8, padding: 6, flexShrink: 0 }}>
-            <Building2 size={18} color="white" />
+        <div style={{ padding: collapsed ? "14px 10px" : "14px 16px", borderBottom: "1px solid #1e3a5f", display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-start" }}>
+          <div style={{ background: "white", borderRadius: 8, padding: collapsed ? 4 : 6, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {collapsed ? (
+              <img src="/logo-icon.png" alt="Hotel HR" style={{ width: 28, height: 28, objectFit: "contain", display: "block" }} />
+            ) : (
+              <img src="/logo-full.png" alt="Hotel HR" style={{ height: 40, width: "auto", objectFit: "contain", display: "block" }} />
+            )}
           </div>
-          {!collapsed && (
-            <div>
-              <div style={{ color: "white", fontWeight: 700, fontSize: 13, lineHeight: 1.2 }}>HR Manager</div>
-              <div style={{ color: "#64748b", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>Payroll & HR System</div>
-            </div>
-          )}
         </div>
 
         {/* Nav */}
@@ -100,14 +98,8 @@ export default function Sidebar() {
         display: "flex", flexDirection: "column",
       }} className="mobile-drawer">
         <div style={{ padding: "16px 18px", borderBottom: "1px solid #1e3a5f", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ background: "#2563eb", borderRadius: 8, padding: 6 }}>
-              <Building2 size={18} color="white" />
-            </div>
-            <div>
-              <div style={{ color: "white", fontWeight: 700, fontSize: 13 }}>HR Manager</div>
-              <div style={{ color: "#64748b", fontSize: 10, textTransform: "uppercase" }}>Payroll & HR System</div>
-            </div>
+          <div style={{ background: "white", borderRadius: 8, padding: 5, display: "flex", alignItems: "center" }}>
+            <img src="/logo-full.png" alt="Hotel HR" style={{ height: 32, width: "auto", objectFit: "contain", display: "block" }} />
           </div>
           <button onClick={() => setMobileOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}>
             <X size={18} />

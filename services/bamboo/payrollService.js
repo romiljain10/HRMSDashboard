@@ -208,6 +208,64 @@ async function fetchWeeklyHours(employeeIds, start, end) {
 }
 
 /**
+ * Real multi-week payroll trend. Fetches the directory once, then fetches
+ * live hours for each of the trailing `weeks` (Mon–Sun) ending at the given
+ * date, in parallel. Returns per-employee cost per week (not pre-aggregated
+ * by department) so the client can filter by location and re-aggregate,
+ * same pattern as the main payroll dataset.
+ */
+export async function getPayrollTrend({ end: endISO, weeks = 6 } = {}) {
+  const endDate = endISO ? new Date(endISO + "T00:00:00") : new Date();
+  const day = endDate.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const weekOfEndMonday = new Date(endDate);
+  weekOfEndMonday.setDate(endDate.getDate() + diffToMonday);
+
+  const directory = await cached("directory-only", fetchDirectoryWithCompensation);
+
+  const weekRanges = Array.from({ length: weeks }, (_, i) => {
+    const offset = weeks - 1 - i; // oldest first
+    const weekStart = new Date(weekOfEndMonday);
+    weekStart.setDate(weekOfEndMonday.getDate() - offset * 7);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    return { weekStart, weekEnd };
+  });
+
+  const weekResults = await Promise.all(
+    weekRanges.map(({ weekStart, weekEnd }) =>
+      cached(`trend-week:${weekStart.toISOString().slice(0, 10)}`, async () => {
+        const { hoursByEmployee } = await fetchWeeklyHours(
+          directory.map((e) => e.id),
+          weekStart,
+          weekEnd
+        );
+
+        const employeeCosts = directory.map((e) => {
+          const hours = hoursByEmployee.get(String(e.id)) || { regularHours: 0, otHours: 0, holidayHours: 0 };
+          const burden = burdenRateFor(e.departmentGroup);
+          const cost = computeLaborCost({ baseRate: e.baseRate, burden, ...hours });
+          return {
+            employeeId: e.id,
+            location: e.location,
+            departmentGroup: e.departmentGroup,
+            totalCost: cost.totalCost,
+          };
+        });
+
+        return {
+          weekLabel: weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+          weekStart: weekStart.toISOString().slice(0, 10),
+          employeeCosts,
+        };
+      })
+    )
+  );
+
+  return { weeks: weekResults };
+}
+
+/**
  * Full live payroll dataset for the current pay period: employees (with
  * computed labor cost), department rollups, and grand total — same shape
  * the UI previously read from the static data/employees.js file.
