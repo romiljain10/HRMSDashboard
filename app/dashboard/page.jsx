@@ -10,13 +10,12 @@ import { SkeletonKpiCard } from "@/components/Skeleton";
 // historical trend line have no BambooHR equivalent — a PMS/revenue system
 // would feed these, so they stay on the static dataset. PROPERTY is the
 // hotel's own profile info, also not BambooHR data.
-import { laborTrend, PROPERTY, weeklyKPIs } from "@/data/employees";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, Legend,
   LineChart, Line,
 } from "recharts";
-import { DollarSign, Users, Grid3X3, AlertTriangle, CheckCircle, Clock, TrendingUp, Building2, MapPin, ChevronRight, TrendingUp as RevIcon, Percent, BedDouble } from "lucide-react";
+import { DollarSign, Users, Grid3X3, AlertTriangle, CheckCircle, Clock, ChevronRight } from "lucide-react";
 import Link from "next/link";
 
 const DEPT_COLORS = ["#1e40af","#2563eb","#7c3aed","#0891b2","#059669","#d97706"];
@@ -68,15 +67,7 @@ export default function Dashboard() {
       <main className="main-content" style={{ flex: 1, overflowY: "auto", padding: "16px 20px", background: "#f0f4f8" }}>
 
         <DataStateBanner loading={loading} error={error} onRetry={retry} degraded={!loading && !error && data?.meta?.hoursLive === false} />
-
-        {/* Pending alert */}
-        {pendingPayroll > 0 && (
-          <div style={{ background: "#fef9c3", border: "1px solid #fde047", borderRadius: 8, padding: "10px 14px", marginBottom: 14, display: "flex", alignItems: "center", gap: 8, fontSize: 13, flexWrap: "wrap" }}>
-            <AlertTriangle size={15} color="#a16207" />
-            <span style={{ color: "#78350f", fontWeight: 600, flex: 1 }}>{pendingPayroll} employees have pending payroll approval</span>
-            <Link href="/payroll" style={{ color: "#2563eb", fontSize: 12 }}>Review →</Link>
-          </div>
-        )}
+        <DataStateBanner loading={false} error={null} degraded={!loading && !error && data?.meta?.compensationAccessible === false} degradedMessage="Pay rates are showing $0 for everyone — this usually means the BambooHR API key's user doesn't have 'Compensation' view permission. Ask an Admin to grant that access, or generate the key from an account that has it." />
 
         {/* KPI Cards */}
         <div className="grid-kpi-4" style={{ marginBottom: 14 }}>
@@ -118,63 +109,6 @@ export default function Dashboard() {
               <div style={{ fontSize: 20, fontWeight: 800, color: c.color }}>{c.value}</div>
             </div>
           )))}
-        </div>
-
-        {/* Top Line Revenue */}
-        <div style={{ marginBottom: 6 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Top Line Revenue &amp; Labor</div>
-        </div>
-        <div className="grid-kpi-4" style={{ marginBottom: 14 }}>
-          <KpiCard
-            title="Top Line Revenue"
-            value={"$" + weeklyKPIs.totalRevenue.toLocaleString("en-US")}
-            icon={RevIcon}
-            accent
-          />
-          <KpiCard
-            title="Room Revenue"
-            value={"$" + weeklyKPIs.roomRevenue.toLocaleString("en-US")}
-            icon={DollarSign}
-          />
-          <KpiCard
-            title="RevPAR"
-            value={"$" + weeklyKPIs.revpar.toFixed(2)}
-            budget={"$" + weeklyKPIs.revparBudget.toFixed(2)}
-            budgetVar={((weeklyKPIs.revpar - weeklyKPIs.revparBudget) / weeklyKPIs.revparBudget) * 100}
-            icon={TrendingUp}
-          />
-          <KpiCard
-            title="Labor % Revenue"
-            value={weeklyKPIs.laborPct.toFixed(1) + "%"}
-            budget={weeklyKPIs.laborBudget.toFixed(1) + "%"}
-            budgetVar={weeklyKPIs.laborPct - weeklyKPIs.laborBudget}
-            format="pct"
-            icon={Percent}
-          />
-        </div>
-        <div className="grid-kpi-4" style={{ marginBottom: 14 }}>
-          <KpiCard title="Occupancy" value={weeklyKPIs.occupancyPct.toFixed(1) + "%"} budget={weeklyKPIs.occupancyBudget.toFixed(1) + "%"} budgetVar={weeklyKPIs.occupancyPct - weeklyKPIs.occupancyBudget} format="pct" size="sm" />
-          <KpiCard title="ADR" value={"$" + weeklyKPIs.adr.toFixed(2)} budget={"$" + weeklyKPIs.adrBudget.toFixed(2)} budgetVar={((weeklyKPIs.adr - weeklyKPIs.adrBudget) / weeklyKPIs.adrBudget) * 100} size="sm" />
-          <KpiCard title="Labor Cost / Occ Room" value={"$" + weeklyKPIs.laborCostPerOccRoom.toFixed(2)} size="sm" />
-          <KpiCard title="GOP %" value={weeklyKPIs.gop.toFixed(1) + "%"} budget={weeklyKPIs.gopBudget.toFixed(1) + "%"} budgetVar={weeklyKPIs.gop - weeklyKPIs.gopBudget} format="pct" size="sm" />
-        </div>
-
-        {/* Labor % of Revenue trend */}
-        <div style={{ background: "white", borderRadius: 8, border: "1px solid #e2e8f0", padding: 14, marginBottom: 14 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: "#0f172a", marginBottom: 2 }}>Labor % of Revenue — 13 Week Trend</div>
-          <div style={{ fontSize: 11, color: "#64748b", marginBottom: 10 }}>Actual vs budget vs prior year</div>
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={laborTrend}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="week" tick={{ fontSize: 9 }} />
-              <YAxis tick={{ fontSize: 9 }} tickFormatter={v => v + "%"} domain={["dataMin - 2", "dataMax + 2"]} />
-              <Tooltip formatter={(v, n) => [v.toFixed(1) + "%", n]} />
-              <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-              <Line type="monotone" dataKey="laborPct" stroke="#2563eb" strokeWidth={2.5} dot={false} name="Actual" />
-              <Line type="monotone" dataKey="budget" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="4 4" dot={false} name="Budget" />
-              <Line type="monotone" dataKey="priorYear" stroke="#d97706" strokeWidth={1.5} dot={false} name="Prior Year" />
-            </LineChart>
-          </ResponsiveContainer>
         </div>
 
         {/* Charts Row */}

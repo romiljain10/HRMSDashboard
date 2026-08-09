@@ -35,6 +35,7 @@ export default function DepartmentsPage() {
       <main className="main-content" style={{ flex: 1, overflowY: "auto", padding: "16px 20px", background: "#f0f4f8" }}>
 
         <DataStateBanner loading={loading} error={error} onRetry={retry} degraded={!loading && !error && data?.meta?.hoursLive === false} />
+        <DataStateBanner loading={false} error={null} degraded={!loading && !error && data?.meta?.compensationAccessible === false} degradedMessage="Payroll costs are showing $0 across departments — this usually means the BambooHR API key's user doesn't have 'Compensation' view permission. Ask an Admin to grant that access, or generate the key from an account that has it." />
 
         {/* Group KPI Cards */}
         <div className="grid-3col" style={{ marginBottom: 14 }}>

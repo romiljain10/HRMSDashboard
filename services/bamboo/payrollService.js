@@ -20,6 +20,9 @@ const REPORT_FIELDS = [
   "lastName",
   "displayName",
   "jobTitle",
+  "workEmail",
+  "mobilePhone",
+  "workPhone",
   "department",
   "location",
   "supervisor",
@@ -60,11 +63,20 @@ async function fetchDirectoryWithCompensation() {
   );
 
   const rows = data?.employees ?? [];
-  return rows.map((row) => ({
+
+  // BambooHR silently omits fields the API key's user lacks permission for,
+  // rather than returning them as null — so if payRate is missing on every
+  // single row, that's almost always a permissions gap (the key's user
+  // needs "Compensation" view access), not actually $0 pay for everyone.
+  const compensationAccessible = rows.length === 0 || rows.some((r) => r.payRate != null);
+
+  const employees = rows.map((row) => ({
     id: row.id,
     employeeNumber: row.employeeNumber || row.id,
     name: row.displayName || `${row.firstName ?? ""} ${row.lastName ?? ""}`.trim(),
     title: row.jobTitle || "",
+    email: row.workEmail || "",
+    phone: row.mobilePhone || row.workPhone || "",
     department: row.department || "Unassigned",
     departmentGroup: departmentGroupFor(row.department),
     location: row.location || "Unassigned",
@@ -77,6 +89,8 @@ async function fetchDirectoryWithCompensation() {
     // downstream labor-cost math is consistent regardless of pay type.
     baseRate: parsePayRate(row.payRate, row.payType),
   }));
+
+  return { employees, compensationAccessible };
 }
 
 function parsePayRate(value, payType) {
@@ -221,7 +235,7 @@ export async function getPayrollTrend({ end: endISO, weeks = 6 } = {}) {
   const weekOfEndMonday = new Date(endDate);
   weekOfEndMonday.setDate(endDate.getDate() + diffToMonday);
 
-  const directory = await cached("directory-only", fetchDirectoryWithCompensation);
+  const { employees: directory } = await cached("directory-only", fetchDirectoryWithCompensation);
 
   const weekRanges = Array.from({ length: weeks }, (_, i) => {
     const offset = weeks - 1 - i; // oldest first
@@ -277,7 +291,7 @@ export async function getPayrollDataset({ start: startISO, end: endISO } = {}) {
   const cacheKey = `payroll-dataset:${start.toISOString().slice(0, 10)}:${end.toISOString().slice(0, 10)}`;
 
   return cached(cacheKey, async () => {
-    const directory = await fetchDirectoryWithCompensation();
+    const { employees: directory, compensationAccessible } = await fetchDirectoryWithCompensation();
     const active = directory; // include all; UI filters by status itself
     const { hoursByEmployee, approvalByEmployee, live: hoursLive } = await fetchWeeklyHours(
       active.map((e) => e.id),
@@ -327,7 +341,7 @@ export async function getPayrollDataset({ start: startISO, end: endISO } = {}) {
       departmentGroups: buildDepartmentGroups(employees),
       grandTotal: round2(employees.reduce((sum, e) => sum + e.totalCost, 0)),
       currentPeriodTotals: buildCurrentPeriodTotals(employees),
-      meta: { hoursLive, ptoLive },
+      meta: { hoursLive, ptoLive, compensationAccessible },
     };
   });
 }

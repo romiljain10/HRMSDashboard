@@ -53,6 +53,7 @@ export default function PayrollPage() {
       <main className="main-content" style={{ flex: 1, overflowY: "auto", padding: "16px 20px", background: "#f0f4f8" }}>
 
         <DataStateBanner loading={loading} error={error} onRetry={retry} degraded={!loading && !error && data?.meta?.hoursLive === false} />
+        <DataStateBanner loading={false} error={null} degraded={!loading && !error && data?.meta?.compensationAccessible === false} degradedMessage="Pay rates are showing $0 for everyone — this usually means the BambooHR API key's user doesn't have 'Compensation' view permission. Ask an Admin to grant that access, or generate the key from an account that has it." />
 
         {/* Quick report links */}
         <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
@@ -149,8 +150,8 @@ export default function PayrollPage() {
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
               <thead>
                 <tr style={{ background: "#f8fafc" }}>
-                  {["Employee","Title","Dept","Reg Hrs","OT Hrs","Holiday Hrs","Base Rate","Burden","RT Rate","OT Rate","Total Cost","Approval"].map(h => (
-                    <th key={h} style={{ textAlign: ["Reg Hrs","OT Hrs","Holiday Hrs","Base Rate","Burden","RT Rate","OT Rate","Total Cost"].includes(h) ? "right" : "left", padding: "7px 10px", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
+                  {["Employee","Title","Dept","Reg Hrs","OT Hrs","Holiday Hrs","Base Rate","Payroll Cost, Tax, Benefits, and Workers Comp","RT Rate","OT Rate","Total Cost","Approval"].map(h => (
+                    <th key={h} style={{ textAlign: ["Reg Hrs","OT Hrs","Holiday Hrs","Base Rate","Payroll Cost, Tax, Benefits, and Workers Comp","RT Rate","OT Rate","Total Cost"].includes(h) ? "right" : "left", padding: "7px 10px", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", whiteSpace: h === "Payroll Cost, Tax, Benefits, and Workers Comp" ? "normal" : "nowrap", maxWidth: h === "Payroll Cost, Tax, Benefits, and Workers Comp" ? 90 : undefined }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -190,15 +191,15 @@ export default function PayrollPage() {
         {/* Regular / OT / Holiday Burden Breakdown by Department */}
         <div id="burden-breakdown" style={{ background: "white", borderRadius: 8, border: "1px solid #e2e8f0", marginTop: 14, overflow: "hidden" }}>
           <div style={{ padding: "10px 14px", borderBottom: "1px solid #f1f5f9" }}>
-            <div style={{ fontWeight: 700, fontSize: 13, color: "#0f172a" }}>Labor Burden Breakdown — Regular / OT / Holiday</div>
-            <div style={{ fontSize: 10, color: "#64748b", marginTop: 2 }}>Employer-paid burden cost (taxes, insurance, benefits @ {((employees[0]?.burden ?? 0) * 100).toFixed(1)}%) split by pay type, per department</div>
+            <div style={{ fontWeight: 700, fontSize: 13, color: "#0f172a" }}>Payroll Cost, Tax, Benefits, and Workers Comp Breakdown — Regular / OT / Holiday</div>
+            <div style={{ fontSize: 10, color: "#64748b", marginTop: 2 }}>Employer-paid Payroll Cost, Tax, Benefits, and Workers Comp (@ {((employees[0]?.burden ?? 0) * 100).toFixed(1)}%) split by pay type, per department</div>
           </div>
           <div className="table-scroll">
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 560 }}>
               <thead>
                 <tr style={{ background: "#f8fafc" }}>
-                  {["Department", "Group", "Regular Burden", "OT Burden", "Holiday Burden", "Total Burden"].map(h => (
-                    <th key={h} style={{ textAlign: ["Regular Burden","OT Burden","Holiday Burden","Total Burden"].includes(h) ? "right" : "left", padding: "7px 12px", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
+                  {["Department", "Group", "Regular PCTB&WC", "OT PCTB&WC", "Holiday PCTB&WC", "Total PCTB&WC"].map(h => (
+                    <th key={h} style={{ textAlign: ["Regular PCTB&WC","OT PCTB&WC","Holiday PCTB&WC","Total PCTB&WC"].includes(h) ? "right" : "left", padding: "7px 12px", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -225,6 +226,46 @@ export default function PayrollPage() {
               </tbody>
             </table>
           </div>
+        </div>
+
+        {/* PTO Detail — full detail lives on Reports → PTO; this is a quick-reference summary */}
+        <div style={{ background: "white", borderRadius: 8, border: "1px solid #e2e8f0", marginTop: 14, overflow: "hidden" }}>
+          <div style={{ padding: "10px 14px", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 13, color: "#0f172a" }}>PTO Detail</div>
+              <div style={{ fontSize: 10, color: "#64748b", marginTop: 2 }}>Accrued / used / remaining balance, live from BambooHR</div>
+            </div>
+            <Link href="/reports/pto" style={{ fontSize: 12, color: "#2563eb", fontWeight: 600, textDecoration: "none" }}>Full PTO Report →</Link>
+          </div>
+          <div className="table-scroll">
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 480 }}>
+              <thead>
+                <tr style={{ background: "#f8fafc" }}>
+                  {["Employee", "Dept", "PTO Accrued", "PTO Used", "PTO Balance"].map(h => (
+                    <th key={h} style={{ textAlign: ["PTO Accrued", "PTO Used", "PTO Balance"].includes(h) ? "right" : "left", padding: "7px 12px", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? <SkeletonTableRows cols={5} rows={6} /> : filtered.slice(0, 15).map(e => (
+                  <tr key={e.id} style={{ borderBottom: "1px solid #f8fafc" }}>
+                    <td style={{ padding: "8px 12px", fontSize: 12, color: "#0f172a", fontWeight: 500 }}>{e.name}</td>
+                    <td style={{ padding: "8px 12px" }}>
+                      <span style={{ background: "#f1f5f9", color: "#64748b", padding: "1px 6px", borderRadius: 3, fontSize: 10 }}>{e.department}</span>
+                    </td>
+                    <td style={{ padding: "8px 12px", textAlign: "right", fontSize: 12 }}>{e.ptoAccrued.toFixed(2)}</td>
+                    <td style={{ padding: "8px 12px", textAlign: "right", fontSize: 12 }}>{e.ptoUsed.toFixed(2)}</td>
+                    <td style={{ padding: "8px 12px", textAlign: "right", fontSize: 12, fontWeight: 700, color: e.ptoBalance < 8 ? "#dc2626" : "#0f172a" }}>{e.ptoBalance.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {filtered.length > 15 && (
+            <div style={{ padding: "8px 14px", borderTop: "1px solid #f1f5f9", fontSize: 11, color: "#94a3b8" }}>
+              Showing 15 of {filtered.length} — see the full PTO Report for everyone.
+            </div>
+          )}
         </div>
       </main>
     </AppLayout>

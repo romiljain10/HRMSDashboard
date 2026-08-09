@@ -16,7 +16,7 @@ export default function EmployeesPage() {
   const employees = data?.employees ?? [];
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState("All");
-  const [statusFilter, setStatusFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("Active");
   const [sortField, setSortField] = useState("name");
   const [sortDir, setSortDir] = useState("asc");
   const [page, setPage] = useState(1);
@@ -123,8 +123,8 @@ export default function EmployeesPage() {
                     { key: "status",         label: "Status" },
                     { key: "regularHours",   label: "Reg Hrs", right: true },
                     { key: "otHours",        label: "OT Hrs",  right: true },
-                    { key: "totalCost",      label: "Weekly Cost", right: true },
-                    { key: "approvalStatus", label: "Approval" },
+                    { key: "email",          label: "Email" },
+                    { key: "phone",          label: "Phone" },
                   ].map(col => (
                     <th key={col.key} onClick={() => toggleSort(col.key)} style={{ padding: "8px 12px", textAlign: col.right ? "right" : "left", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", cursor: "pointer", whiteSpace: "nowrap", userSelect: "none" }}>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
@@ -161,14 +161,8 @@ export default function EmployeesPage() {
                     </td>
                     <td style={{ padding: "8px 12px", textAlign: "right", fontSize: 12 }}>{e.regularHours.toFixed(2)}</td>
                     <td style={{ padding: "8px 12px", textAlign: "right", fontSize: 12, color: e.otHours > 0 ? "#dc2626" : "#94a3b8", fontWeight: e.otHours > 0 ? 700 : 400 }}>{e.otHours.toFixed(2)}</td>
-                    <td style={{ padding: "8px 12px", textAlign: "right", fontSize: 12, fontWeight: 700, color: e.totalCost > 0 ? "#0f172a" : "#94a3b8" }}>
-                      {e.totalCost > 0 ? "$" + e.totalCost.toLocaleString("en-US", { minimumFractionDigits: 2 }) : "—"}
-                    </td>
-                    <td style={{ padding: "8px 12px" }}>
-                      <span style={{ background: e.approvalStatus === "Approved" ? "#dcfce7" : "#fef9c3", color: e.approvalStatus === "Approved" ? "#16a34a" : "#a16207", padding: "2px 7px", borderRadius: 999, fontSize: 10, fontWeight: 600 }}>
-                        {e.approvalStatus}
-                      </span>
-                    </td>
+                    <td style={{ padding: "8px 12px", fontSize: 11, color: "#475569", whiteSpace: "nowrap" }}>{e.email || "—"}</td>
+                    <td style={{ padding: "8px 12px", fontSize: 11, color: "#475569", whiteSpace: "nowrap" }}>{e.phone || "—"}</td>
                     <td style={{ padding: "8px 12px" }}>
                       <Link href={`/employees/${e.id}`} style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "#2563eb", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>
                         <Eye size={12} /> View
