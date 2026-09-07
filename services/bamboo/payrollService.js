@@ -148,12 +148,52 @@ function isoWeekKey(dateStr) {
 const WEEKLY_OT_THRESHOLD = 40; // FLSA standard; per-week, not per-pay-period
 
 /**
+ * Fetches company holidays overlapping the given range from BambooHR's
+ * holiday calendar (added Aug 2026 — GET /v1/holidays). Returns a Set of
+ * ISO date strings ("2026-07-04") for every day covered by a holiday, so
+ * timesheet entries can be checked against it with a simple lookup.
+ * Falls back to an empty set on any failure — holiday detection degrades
+ * gracefully rather than breaking the whole hours calculation.
+ */
+async function fetchHolidayDates(start, end) {
+  const isoStart = start.toISOString().slice(0, 10);
+  const isoEnd = end.toISOString().slice(0, 10);
+
+  try {
+    const data = await bambooGet("/holidays", {
+      filter: `startDate le '${isoEnd}' and endDate ge '${isoStart}'`,
+      limit: 100,
+    });
+
+    const holidays = Array.isArray(data) ? data : data?.data ?? data?.items ?? [];
+    const dates = new Set();
+
+    for (const h of holidays) {
+      if (!h.startDate) continue;
+      const d = new Date(h.startDate + "T00:00:00");
+      const last = new Date((h.endDate || h.startDate) + "T00:00:00");
+      while (d <= last) {
+        dates.add(d.toISOString().slice(0, 10));
+        d.setDate(d.getDate() + 1);
+      }
+    }
+
+    return dates;
+  } catch {
+    // Holiday endpoint unavailable/not permitted for this API key — treat
+    // as "no holidays" rather than failing the whole hours calculation.
+    return new Set();
+  }
+}
+
+/**
  * Fetches real timesheet entries for the given date range and derives:
  * - regular/OT hours, computed the same way BambooHR's own Payroll Hours
  *   report does — total hours worked bucketed by calendar week (Mon–Sun),
- *   with hours over 40/week counted as overtime. (Holiday-worked hours
- *   aren't broken out here — that requires cross-referencing the company
- *   holiday calendar, which isn't wired up yet.)
+ *   with hours over 40/week counted as overtime.
+ * - holiday hours, cross-referenced against BambooHR's company holiday
+ *   calendar (GET /v1/holidays) — hours worked on a holiday date are
+ *   pulled out separately and don't count toward the 40hr/week threshold.
  * - real approval status, from each entry's actual `approved` field
  *   (BambooHR tracks this natively — see the Payroll Hours report).
  */
@@ -162,16 +202,23 @@ async function fetchWeeklyHours(employeeIds, start, end) {
   const isoEnd = end.toISOString().slice(0, 10);
 
   try {
-    const data = await bambooGet("/time_tracking/timesheet_entries", {
-      employeeIds: employeeIds.join(","),
-      start: isoStart,
-      end: isoEnd,
-    });
+    const [data, holidayDates] = await Promise.all([
+      bambooGet("/time_tracking/timesheet_entries", {
+        employeeIds: employeeIds.join(","),
+        start: isoStart,
+        end: isoEnd,
+      }),
+      fetchHolidayDates(start, end),
+    ]);
 
     const entries = normalizeTimesheetEntries(data);
 
-    // employeeId -> weekKey -> total hours
+    // employeeId -> weekKey -> total hours (holiday-dated hours excluded —
+    // those are tracked separately and paid at the holiday rate regardless
+    // of the 40hr/week threshold, not folded into regular/OT).
     const weeklyTotals = new Map();
+    // employeeId -> total holiday hours
+    const holidayTotals = new Map();
     // employeeId -> { anyApproved, allApproved, count }
     const approval = new Map();
 
@@ -181,10 +228,14 @@ async function fetchWeeklyHours(employeeIds, start, end) {
       const dateStr = entry.date || entry.start?.slice(0, 10);
       if (!dateStr) continue;
 
-      const weekKey = isoWeekKey(dateStr);
-      if (!weeklyTotals.has(empId)) weeklyTotals.set(empId, new Map());
-      const empWeeks = weeklyTotals.get(empId);
-      empWeeks.set(weekKey, (empWeeks.get(weekKey) || 0) + hrs);
+      if (holidayDates.has(dateStr)) {
+        holidayTotals.set(empId, (holidayTotals.get(empId) || 0) + hrs);
+      } else {
+        const weekKey = isoWeekKey(dateStr);
+        if (!weeklyTotals.has(empId)) weeklyTotals.set(empId, new Map());
+        const empWeeks = weeklyTotals.get(empId);
+        empWeeks.set(weekKey, (empWeeks.get(weekKey) || 0) + hrs);
+      }
 
       const isApproved = entry.approved === true || Boolean(entry.approvedAt);
       const a = approval.get(empId) || { count: 0, approvedCount: 0 };
@@ -194,7 +245,9 @@ async function fetchWeeklyHours(employeeIds, start, end) {
     }
 
     const hoursByEmployee = new Map();
-    for (const [empId, weeks] of weeklyTotals.entries()) {
+    const allEmployeeIds = new Set([...weeklyTotals.keys(), ...holidayTotals.keys()]);
+    for (const empId of allEmployeeIds) {
+      const weeks = weeklyTotals.get(empId) || new Map();
       let regularHours = 0;
       let otHours = 0;
       for (const weekTotal of weeks.values()) {
@@ -204,7 +257,7 @@ async function fetchWeeklyHours(employeeIds, start, end) {
       hoursByEmployee.set(empId, {
         regularHours: Math.round(regularHours * 100) / 100,
         otHours: Math.round(otHours * 100) / 100,
-        holidayHours: 0, // not yet cross-referenced against company holiday calendar
+        holidayHours: Math.round((holidayTotals.get(empId) || 0) * 100) / 100,
       });
     }
 
