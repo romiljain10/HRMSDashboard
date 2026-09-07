@@ -4,7 +4,7 @@ import Header from "@/components/Header";
 import { useFilteredPayrollDataset } from "@/hooks/useFilteredPayrollDataset";
 import { useDateRange, formatDateRangeLabel } from "@/contexts/DateRangeContext";
 import { DataStateBanner } from "@/components/DataStateBanner";
-import { SkeletonTableRows } from "@/components/Skeleton";
+import { SkeletonTableRows, SkeletonKpiCard } from "@/components/Skeleton";
 import { useState } from "react";
 import { Search, ChevronUp, ChevronDown, Eye } from "lucide-react";
 import Avatar from "@/components/Avatar";
@@ -16,7 +16,7 @@ export default function EmployeesPage() {
   const employees = data?.employees ?? [];
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState("All");
-  const [statusFilter, setStatusFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("Active");
   const [sortField, setSortField] = useState("name");
   const [sortDir, setSortDir] = useState("asc");
   const [page, setPage] = useState(1);
@@ -57,12 +57,27 @@ export default function EmployeesPage() {
         <DataStateBanner loading={loading} error={error} onRetry={retry} degraded={!loading && !error && data?.meta?.hoursLive === false} />
 
         {/* Stats */}
-        <div className="grid-kpi-4" style={{ marginBottom: 14 }}>
-          {[
+        <div className="grid-kpi-4" style={{ marginBottom: 10 }}>
+          {loading ? Array.from({ length: 4 }).map((_, i) => <SkeletonKpiCard key={i} />) : [
             { label: "Total Employees",      value: employees.length,                                                color: "#2563eb" },
             { label: "Active",               value: employees.filter(e => e.status === "Active").length,            color: "#16a34a" },
-            { label: "Worked This Week",     value: employees.filter(e => e.regularHours + e.otHours > 0).length,  color: "#7c3aed" },
+            { label: "Worked This Period",   value: employees.filter(e => e.regularHours + e.otHours > 0).length,  color: "#7c3aed" },
             { label: "Pending Approval",     value: employees.filter(e => e.approvalStatus === "Pending").length,  color: "#d97706" },
+          ].map((s, i) => (
+            <div key={i} style={{ background: "white", borderRadius: 8, border: "1px solid #e2e8f0", padding: "12px 14px" }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: s.color }}>{s.value}</div>
+              <div style={{ fontSize: 11, color: "#64748b", fontWeight: 500 }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Hours & Cost Summary — recomputed live from the filtered employee set (location, date range, etc.) */}
+        <div className="grid-kpi-4" style={{ marginBottom: 14 }}>
+          {loading ? Array.from({ length: 4 }).map((_, i) => <SkeletonKpiCard key={i} />) : [
+            { label: "Regular Hours", value: employees.reduce((s, e) => s + e.regularHours, 0).toFixed(1), color: "#0f172a" },
+            { label: "OT Hours",      value: employees.reduce((s, e) => s + e.otHours, 0).toFixed(1),      color: employees.reduce((s, e) => s + e.otHours, 0) > 0 ? "#dc2626" : "#94a3b8" },
+            { label: "Total Hours",   value: employees.reduce((s, e) => s + e.regularHours + e.otHours + e.holidayHours, 0).toFixed(1), color: "#7c3aed" },
+            { label: "Weekly Cost",   value: "$" + employees.reduce((s, e) => s + e.totalCost, 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), color: "#059669" },
           ].map((s, i) => (
             <div key={i} style={{ background: "white", borderRadius: 8, border: "1px solid #e2e8f0", padding: "12px 14px" }}>
               <div style={{ fontSize: 20, fontWeight: 800, color: s.color }}>{s.value}</div>
@@ -108,8 +123,8 @@ export default function EmployeesPage() {
                     { key: "status",         label: "Status" },
                     { key: "regularHours",   label: "Reg Hrs", right: true },
                     { key: "otHours",        label: "OT Hrs",  right: true },
-                    { key: "totalCost",      label: "Weekly Cost", right: true },
-                    { key: "approvalStatus", label: "Approval" },
+                    { key: "email",          label: "Email" },
+                    { key: "phone",          label: "Phone" },
                   ].map(col => (
                     <th key={col.key} onClick={() => toggleSort(col.key)} style={{ padding: "8px 12px", textAlign: col.right ? "right" : "left", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", cursor: "pointer", whiteSpace: "nowrap", userSelect: "none" }}>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
@@ -146,14 +161,8 @@ export default function EmployeesPage() {
                     </td>
                     <td style={{ padding: "8px 12px", textAlign: "right", fontSize: 12 }}>{e.regularHours.toFixed(2)}</td>
                     <td style={{ padding: "8px 12px", textAlign: "right", fontSize: 12, color: e.otHours > 0 ? "#dc2626" : "#94a3b8", fontWeight: e.otHours > 0 ? 700 : 400 }}>{e.otHours.toFixed(2)}</td>
-                    <td style={{ padding: "8px 12px", textAlign: "right", fontSize: 12, fontWeight: 700, color: e.totalCost > 0 ? "#0f172a" : "#94a3b8" }}>
-                      {e.totalCost > 0 ? "$" + e.totalCost.toLocaleString("en-US", { minimumFractionDigits: 2 }) : "—"}
-                    </td>
-                    <td style={{ padding: "8px 12px" }}>
-                      <span style={{ background: e.approvalStatus === "Approved" ? "#dcfce7" : "#fef9c3", color: e.approvalStatus === "Approved" ? "#16a34a" : "#a16207", padding: "2px 7px", borderRadius: 999, fontSize: 10, fontWeight: 600 }}>
-                        {e.approvalStatus}
-                      </span>
-                    </td>
+                    <td style={{ padding: "8px 12px", fontSize: 11, color: "#475569", whiteSpace: "nowrap" }}>{e.email || "—"}</td>
+                    <td style={{ padding: "8px 12px", fontSize: 11, color: "#475569", whiteSpace: "nowrap" }}>{e.phone || "—"}</td>
                     <td style={{ padding: "8px 12px" }}>
                       <Link href={`/employees/${e.id}`} style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "#2563eb", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>
                         <Eye size={12} /> View
