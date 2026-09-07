@@ -263,6 +263,9 @@ export async function getPayrollTrend({ end: endISO, weeks = 6 } = {}) {
             employeeId: e.id,
             location: e.location,
             departmentGroup: e.departmentGroup,
+            regularHours: hours.regularHours,
+            otHours: hours.otHours,
+            holidayHours: hours.holidayHours,
             totalCost: cost.totalCost,
           };
         });

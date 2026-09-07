@@ -3,11 +3,13 @@ import AppLayout from "@/components/AppLayout";
 import Header from "@/components/Header";
 import { Download, FileText, Calendar, BarChart2, Users, DollarSign, Clock, Grid3X3, CalendarClock, ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 import { useFilteredPayrollDataset } from "@/hooks/useFilteredPayrollDataset";
 import { useDateRange, formatDateRangeLabel } from "@/contexts/DateRangeContext";
 import { buildReportRows } from "@/lib/reports/buildRows";
 import { exportCSV, exportXLSX, exportPDF } from "@/lib/reports/exportFile";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useWeeklyTrend } from "@/hooks/useWeeklyTrend";
 
 const reports = [
   {
@@ -48,14 +50,24 @@ const reports = [
 ];
 
 export default function ReportsPage() {
-  const { data, locations, location } = useFilteredPayrollDataset();
+  const { data, loading, locations, location } = useFilteredPayrollDataset();
   const { start, end } = useDateRange();
   const { user: currentUser } = useCurrentUser();
   const canExport = !currentUser || currentUser.role !== "Viewer";
   const today = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const [emptyNotice, setEmptyNotice] = useState(null);
+  const HISTORICAL_KEYS = ["payroll-hours-schedule", "payroll-history-summary"];
+  const { weeklyTotals, loading: trendLoading } = useWeeklyTrend(13);
 
   function handleExport(report, format) {
-    const { columns, rows } = buildReportRows(report.key, data);
+    const isHistorical = HISTORICAL_KEYS.includes(report.key);
+    if (loading || !data || (isHistorical && trendLoading)) return;
+    const { columns, rows } = buildReportRows(report.key, data, isHistorical ? weeklyTotals : undefined);
+    if (rows.length === 0) {
+      setEmptyNotice(report.key);
+      setTimeout(() => setEmptyNotice((k) => (k === report.key ? null : k)), 4000);
+      return;
+    }
     if (format === "CSV") exportCSV(report.name, columns, rows);
     else if (format === "XLSX") exportXLSX(report.name, columns, rows);
     else if (format === "PDF") exportPDF(report.name, columns, rows, `${location} | ${formatDateRangeLabel(start, end)}`);
@@ -86,11 +98,14 @@ export default function ReportsPage() {
                     )}
                     <div style={{ fontSize: 11, color: "#64748b", marginBottom: 10, lineHeight: 1.5 }}>{report.desc}</div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                      {canExport ? report.formats.map(fmt => (
-                        <button key={fmt} onClick={() => handleExport(report, fmt)} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 9px", border: "1px solid #e2e8f0", borderRadius: 5, background: "white", color: "#475569", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                      {canExport ? report.formats.map(fmt => {
+                        const isDisabled = loading || (HISTORICAL_KEYS.includes(report.key) && trendLoading);
+                        return (
+                        <button key={fmt} onClick={() => handleExport(report, fmt)} disabled={isDisabled} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 9px", border: "1px solid #e2e8f0", borderRadius: 5, background: isDisabled ? "#f8fafc" : "white", color: isDisabled ? "#cbd5e1" : "#475569", fontSize: 11, fontWeight: 600, cursor: isDisabled ? "default" : "pointer" }}>
                           <Download size={11} /> {fmt}
                         </button>
-                      )) : (
+                        );
+                      }) : (
                         <span style={{ fontSize: 10, color: "#94a3b8", fontStyle: "italic" }}>Export requires Payroll Manager or Admin access</span>
                       )}
                       <button style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 9px", border: "1px solid #dbeafe", borderRadius: 5, background: "#dbeafe", color: "#1d4ed8", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
@@ -98,6 +113,11 @@ export default function ReportsPage() {
                       </button>
                       <span style={{ fontSize: 10, color: "#94a3b8", marginLeft: "auto" }}>Last: {today}</span>
                     </div>
+                    {emptyNotice === report.key && (
+                      <div style={{ marginTop: 6, fontSize: 10, color: "#a16207", background: "#fef9c3", border: "1px solid #fde047", borderRadius: 4, padding: "4px 8px" }}>
+                        No matching records for this period — nothing to export.
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

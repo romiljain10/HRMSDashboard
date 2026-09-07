@@ -52,7 +52,20 @@ export function useWeeklyTrend(weeks = 6) {
     return row;
   });
 
+  const weeklyTotals = rawWeeks.map((w) => {
+    const filtered = location === "All Locations" ? w.employeeCosts : w.employeeCosts.filter((e) => e.location === location);
+    const sum = (key) => Math.round(filtered.reduce((s, e) => s + (e[key] || 0), 0) * 100) / 100;
+    return {
+      weekLabel: w.weekLabel,
+      weekStart: w.weekStart,
+      regularHours: sum("regularHours"),
+      otHours: sum("otHours"),
+      holidayHours: sum("holidayHours"),
+      totalCost: sum("totalCost"),
+    };
+  });
+
   const groups = groupNames.map((name) => ({ name, key: groupKey(name) }));
 
-  return { chartData, groups, loading, error, retry: load };
+  return { chartData, weeklyTotals, groups, loading, error, retry: load };
 }

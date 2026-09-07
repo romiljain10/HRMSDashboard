@@ -9,6 +9,10 @@ import { useDateRange, formatDateRangeLabel } from "@/contexts/DateRangeContext"
 import { useState } from "react";
 import { Search, Download, CheckCircle, Clock, AlertCircle, Clock3, CalendarDays } from "lucide-react";
 import Link from "next/link";
+import { buildDepartmentTotals, buildBurdenByDepartment, buildCurrentPeriodTotals } from "@/lib/payroll/aggregates";
+import { round2 } from "@/lib/payroll/config";
+import { exportCSV, exportXLSX } from "@/lib/reports/exportFile";
+import { buildReportRows } from "@/lib/reports/buildRows";
 
 function StatusBadge({ status }) {
   const cfg = {
@@ -26,13 +30,25 @@ function StatusBadge({ status }) {
 export default function PayrollPage() {
   const { data, loading, error, retry, locations, location } = useFilteredPayrollDataset();
   const { start, end } = useDateRange();
-  const employees = data?.employees ?? [];
-  const departmentTotals = data?.departmentTotals ?? [];
-  const burdenByDepartment = data?.burdenByDepartment ?? [];
-  const GRAND_TOTAL = data?.grandTotal || 0;
-  const CURRENT_PERIOD_TOTALS = data?.currentPeriodTotals ?? { regularHours: 0, otHours: 0, holidayHours: 0 };
+  const allEmployees = data?.employees ?? [];
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState("All");
+  // Default to "Approved" so the page opens showing only approved payroll —
+  // switch to "Pending" or "All" to review what's still outstanding.
+  const [approvalFilter, setApprovalFilter] = useState("Approved");
+  const [exportOpen, setExportOpen] = useState(false);
+  const [deptExportOpen, setDeptExportOpen] = useState(false);
+
+  const employees = approvalFilter === "All" ? allEmployees : allEmployees.filter(e => e.approvalStatus === approvalFilter);
+
+  // Department Rollups, Burden Breakdown, and the KPI cards below all
+  // recompute from the approval-filtered set, so "Approved" really means
+  // every number on the page reflects only approved hours/cost.
+  const departmentTotals = buildDepartmentTotals(employees);
+  const burdenByDepartment = buildBurdenByDepartment(employees);
+  const currentPeriodTotalsComputed = buildCurrentPeriodTotals(employees);
+  const CURRENT_PERIOD_TOTALS = currentPeriodTotalsComputed;
+  const GRAND_TOTAL = round2(employees.reduce((s, e) => s + e.totalCost, 0));
 
   const depts = ["All", ...new Set(employees.map(e => e.departmentGroup))];
   const filtered = employees.filter(e => {
@@ -45,7 +61,13 @@ export default function PayrollPage() {
   const totalHours   = filtered.reduce((s, e) => s + e.regularHours + e.otHours + e.holidayHours, 0);
   const totalOT      = filtered.reduce((s, e) => s + e.otHours, 0);
   const totalHoliday = filtered.reduce((s, e) => s + e.holidayHours, 0);
-  const pending      = filtered.filter(e => e.approvalStatus === "Pending").length;
+  const pending      = allEmployees.filter(e => e.approvalStatus === "Pending").length;
+
+  function handleExport(reportKey, format) {
+    const { columns, rows } = buildReportRows(reportKey, { ...data, employees: filtered, departmentTotals, burdenByDepartment });
+    if (format === "CSV") exportCSV(reportKey, columns, rows);
+    else exportXLSX(reportKey, columns, rows);
+  }
 
   return (
     <AppLayout>
@@ -92,7 +114,24 @@ export default function PayrollPage() {
 
         {/* Department Rollups */}
         <div style={{ background: "white", borderRadius: 8, border: "1px solid #e2e8f0", marginBottom: 14, overflow: "hidden" }}>
-          <div style={{ padding: "10px 14px", borderBottom: "1px solid #f1f5f9", fontWeight: 700, fontSize: 13, color: "#0f172a" }}>Department Rollups</div>
+          <div style={{ padding: "10px 14px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ fontWeight: 700, fontSize: 13, color: "#0f172a" }}>Department Rollups</span>
+            <div style={{ position: "relative" }}>
+              <button onClick={() => setDeptExportOpen(o => !o)} style={{ display: "flex", alignItems: "center", gap: 5, background: "white", color: "#2563eb", border: "1px solid #dbeafe", borderRadius: 6, padding: "4px 9px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                <Download size={11} /> Export
+              </button>
+              {deptExportOpen && (
+                <div style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", background: "white", border: "1px solid #e2e8f0", borderRadius: 6, boxShadow: "0 8px 24px rgba(15,23,42,0.12)", zIndex: 50, overflow: "hidden" }}>
+                  {["CSV", "XLSX"].map(fmt => (
+                    <button key={fmt} onClick={() => { handleExport("department-payroll-rollup", fmt); setDeptExportOpen(false); }}
+                      style={{ display: "block", width: "100%", padding: "7px 14px", border: "none", background: "white", fontSize: 12, color: "#0f172a", cursor: "pointer", textAlign: "left" }}>
+                      {fmt}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
           <div className="table-scroll">
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 480 }}>
               <thead>
@@ -142,9 +181,25 @@ export default function PayrollPage() {
               style={{ padding: "5px 8px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, outline: "none" }}>
               {depts.map(d => <option key={d}>{d}</option>)}
             </select>
-            <button style={{ display: "flex", alignItems: "center", gap: 5, background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-              <Download size={12} /> Export
-            </button>
+            <select value={approvalFilter} onChange={e => setApprovalFilter(e.target.value)}
+              style={{ padding: "5px 8px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, outline: "none" }}>
+              {["Approved", "Pending", "All"].map(a => <option key={a}>{a}</option>)}
+            </select>
+            <div style={{ position: "relative" }}>
+              <button onClick={() => setExportOpen(o => !o)} style={{ display: "flex", alignItems: "center", gap: 5, background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                <Download size={12} /> Export
+              </button>
+              {exportOpen && (
+                <div style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", background: "white", border: "1px solid #e2e8f0", borderRadius: 6, boxShadow: "0 8px 24px rgba(15,23,42,0.12)", zIndex: 50, overflow: "hidden" }}>
+                  {["CSV", "XLSX"].map(fmt => (
+                    <button key={fmt} onClick={() => { handleExport("weekly-payroll-detail", fmt); setExportOpen(false); }}
+                      style={{ display: "block", width: "100%", padding: "7px 14px", border: "none", background: "white", fontSize: 12, color: "#0f172a", cursor: "pointer", textAlign: "left" }}>
+                      {fmt}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <div className="table-scroll">
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>

@@ -78,7 +78,6 @@ export default function Dashboard() {
             { label: "Total Employees",   value: totalEmployees,                                    color: "#2563eb", icon: Users,      sub: `${activeEmployees} active` },
             { label: "Departments",       value: departments,                                        color: "#7c3aed", icon: Grid3X3,    sub: "Active departments" },
             { label: "Monthly Payroll",   value: "$" + (monthlyPayroll / 1000).toFixed(0) + "K",   color: "#059669", icon: DollarSign, sub: "Estimated this month" },
-            { label: "Pending Approvals", value: pendingPayroll,                                     color: "#d97706", icon: AlertTriangle, sub: "Require action" },
           ].map((s, i) => (
             <div key={i} style={{ background: "white", borderRadius: 8, border: "1px solid #e2e8f0", padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
               <div style={{ background: s.color + "15", borderRadius: 8, padding: 9, flexShrink: 0 }}>

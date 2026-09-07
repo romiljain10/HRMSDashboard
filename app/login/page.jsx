@@ -1,7 +1,7 @@
 "use client";
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Lock } from "lucide-react";
+import { Building2, Lock } from "lucide-react";
 
 function LoginForm() {
   const router = useRouter();
@@ -38,8 +38,14 @@ function LoginForm() {
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f0f4f8", padding: 16 }}>
       <form onSubmit={handleSubmit} style={{ background: "white", borderRadius: 12, border: "1px solid #e2e8f0", padding: 32, width: "100%", maxWidth: 360, boxShadow: "0 8px 24px rgba(15,23,42,0.06)" }}>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 24 }}>
-          <img src="/logo-full.png" alt="Hotel HR" style={{ height: 64, width: "auto", objectFit: "contain" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
+          <div style={{ background: "#2563eb", borderRadius: 8, padding: 8 }}>
+            <Building2 size={20} color="white" />
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "#0f172a" }}>HR Manager</div>
+            <div style={{ fontSize: 10, color: "#64748b" }}>PAYROLL & HR SYSTEM</div>
+          </div>
         </div>
 
         <label style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Username</label>

@@ -3,7 +3,7 @@ import { LocationProvider } from "@/contexts/LocationContext";
 import { DateRangeProvider } from "@/contexts/DateRangeContext";
 
 export const metadata = {
-  title: "Hotel HR – Payroll & HR Management System",
+  title: "HR Manager – Payroll & HR Management System",
   description: "HRMS Payroll and Employee Management Platform",
 };
 
