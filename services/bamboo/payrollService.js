@@ -376,6 +376,10 @@ export async function getPayrollDataset({ start: startISO, end: endISO } = {}) {
         burden,
         ...hours,
       });
+      // PTO used is paid at the employee's fully-loaded regular rate — not
+      // a special PTO multiplier, since BambooHR doesn't expose one and
+      // straight-rate PTO pay is the standard default.
+      const ptoCost = round2(pto.ptoUsed * cost.fullyLoadedRT);
 
       return {
         ...e,
@@ -383,6 +387,7 @@ export async function getPayrollDataset({ start: startISO, end: endISO } = {}) {
         ...pto,
         burden,
         ...cost,
+        ptoCost,
         // Real approval status from BambooHR's own timesheet approval
         // tracking (see fetchWeeklyHours) — falls back to "Pending" when
         // there's no timesheet data to derive it from for this employee.
@@ -395,7 +400,7 @@ export async function getPayrollDataset({ start: startISO, end: endISO } = {}) {
       departmentTotals: buildDepartmentTotals(employees),
       burdenByDepartment: buildBurdenByDepartment(employees),
       departmentGroups: buildDepartmentGroups(employees),
-      grandTotal: round2(employees.reduce((sum, e) => sum + e.totalCost, 0)),
+      grandTotal: round2(employees.reduce((sum, e) => sum + e.totalCost + e.ptoCost, 0)),
       currentPeriodTotals: buildCurrentPeriodTotals(employees),
       meta: { hoursLive, ptoLive, compensationAccessible },
     };

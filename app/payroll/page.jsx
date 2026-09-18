@@ -48,7 +48,7 @@ export default function PayrollPage() {
   const burdenByDepartment = buildBurdenByDepartment(employees);
   const currentPeriodTotalsComputed = buildCurrentPeriodTotals(employees);
   const CURRENT_PERIOD_TOTALS = currentPeriodTotalsComputed;
-  const GRAND_TOTAL = round2(employees.reduce((s, e) => s + e.totalCost, 0));
+  const GRAND_TOTAL = round2(employees.reduce((s, e) => s + e.totalCost + (e.ptoCost || 0), 0));
 
   const depts = ["All", ...new Set(employees.map(e => e.departmentGroup))];
   const filtered = employees.filter(e => {
@@ -57,7 +57,7 @@ export default function PayrollPage() {
     return matchSearch && matchDept;
   });
 
-  const totalPayroll = filtered.reduce((s, e) => s + e.totalCost, 0);
+  const totalPayroll = filtered.reduce((s, e) => s + e.totalCost + (e.ptoCost || 0), 0);
   const totalHours   = filtered.reduce((s, e) => s + e.regularHours + e.otHours + e.holidayHours, 0);
   const totalOT      = filtered.reduce((s, e) => s + e.otHours, 0);
   const totalHoliday = filtered.reduce((s, e) => s + e.holidayHours, 0);
@@ -93,7 +93,7 @@ export default function PayrollPage() {
             Array.from({ length: 4 }).map((_, i) => <SkeletonKpiCard key={i} />)
           ) : (
           [
-            { label: "Total Payroll",      value: "$" + totalPayroll.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), color: "#2563eb" },
+            { label: "Total Payroll (incl. PTO)", value: "$" + totalPayroll.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), color: "#2563eb" },
             { label: "Total Hours",        value: totalHours.toFixed(1), color: "#7c3aed" },
             { label: "OT Hours",           value: totalOT.toFixed(1), color: totalOT > 0 ? "#dc2626" : "#059669" },
             { label: "Holiday Hours",      value: totalHoliday.toFixed(1), color: totalHoliday > 0 ? "#d97706" : "#94a3b8" },

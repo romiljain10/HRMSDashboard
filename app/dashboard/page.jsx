@@ -98,7 +98,7 @@ export default function Dashboard() {
             Array.from({ length: 4 }).map((_, i) => <SkeletonKpiCard key={i} />)
           ) : (
           [
-            { label: "Weekly Payroll",      value: "$" + GRAND_TOTAL.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), color: "#1e40af" },
+            { label: "Weekly Payroll (incl. PTO)", value: "$" + GRAND_TOTAL.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), color: "#1e40af" },
             { label: "Total Hours",         value: CURRENT_PERIOD_TOTALS.totalHours.toFixed(1) + " hrs", color: "#7c3aed" },
             { label: "Approved",            value: approvedPayroll,  color: "#059669" },
             { label: "OT Hours",            value: CURRENT_PERIOD_TOTALS.otHours.toFixed(1) + " hrs", color: "#dc2626" },

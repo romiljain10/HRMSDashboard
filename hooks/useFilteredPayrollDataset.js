@@ -29,7 +29,7 @@ export function useFilteredPayrollDataset() {
         departmentTotals: buildDepartmentTotals(employees),
         burdenByDepartment: buildBurdenByDepartment(employees),
         departmentGroups: buildDepartmentGroups(employees),
-        grandTotal: round2(employees.reduce((sum, e) => sum + e.totalCost, 0)),
+        grandTotal: round2(employees.reduce((sum, e) => sum + e.totalCost + (e.ptoCost || 0), 0)),
         currentPeriodTotals: buildCurrentPeriodTotals(employees),
       }
     : null;
