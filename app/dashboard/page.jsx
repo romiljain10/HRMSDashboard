@@ -18,6 +18,7 @@ import {
 import { DollarSign, Users, Grid3X3, AlertTriangle, CheckCircle, Clock, ChevronRight, TrendingUp, Percent, BedDouble } from "lucide-react";
 import Link from "next/link";
 import { useRevenueSnapshot } from "@/hooks/useRevenueSnapshot";
+import { useWeeklyTips } from "@/hooks/useWeeklyTips";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 const DEPT_COLORS = ["#1e40af","#2563eb","#7c3aed","#0891b2","#059669","#d97706"];
@@ -30,6 +31,7 @@ export default function Dashboard() {
   const GRAND_TOTAL = data?.grandTotal || 0;
   const CURRENT_PERIOD_TOTALS = data?.currentPeriodTotals ?? { regularHours: 0, otHours: 0, holidayHours: 0, totalHours: 0, totalCost: 0 };
   const { snapshot: revenue, loading: revenueLoading, error: revenueError } = useRevenueSnapshot();
+  const { total: tipsTotal, enteredForCurrentSelection: tipsEntered, loading: tipsLoading } = useWeeklyTips();
   const { user: currentUser } = useCurrentUser();
   const currentRole = currentUser?.role;
 
@@ -160,6 +162,7 @@ export default function Dashboard() {
             { label: "Minutes per Room", value: minutesPerRoom != null ? minutesPerRoom.toFixed(1) + " min" : "— (no Booked Rooms on file)", color: "#7c3aed" },
             { label: "Booked Rooms", value: (revenue.bookedRooms || 0).toLocaleString("en-US"), color: "#0f172a" },
             { label: "Room Revenue", value: "$" + (revenue.roomRevenue || 0).toLocaleString("en-US"), color: "#059669" },
+            { label: "Tips (this week)", value: tipsLoading ? "..." : tipsEntered ? "$" + tipsTotal.toLocaleString("en-US", { minimumFractionDigits: 2 }) : "Not entered", color: tipsEntered ? "#0f172a" : "#94a3b8" },
           ].map((c, i) => (
             <div key={i} style={{ background: "white", borderRadius: 8, border: "1px solid #e2e8f0", padding: "12px 14px" }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>{c.label}</div>

@@ -3,18 +3,75 @@ import AppLayout from "@/components/AppLayout";
 import Header from "@/components/Header";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useLocationFilter } from "@/contexts/LocationContext";
+import { useDateRange, formatDateRangeLabel } from "@/contexts/DateRangeContext";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Download, Upload, CheckCircle, AlertTriangle, FileSpreadsheet } from "lucide-react";
+import { Download, Upload, CheckCircle, AlertTriangle, FileSpreadsheet, DollarSign } from "lucide-react";
 
 export default function RevenuePage() {
   const { user: currentUser, loading: userLoading } = useCurrentUser();
   const { location } = useLocationFilter();
+  const { start, end } = useDateRange();
   const canUpload = currentUser?.role === "Admin" || currentUser?.role === "Payroll Manager";
 
   const [uploads, setUploads] = useState([]);
   const [uploadsLoading, setUploadsLoading] = useState(true);
   const [uploadState, setUploadState] = useState({ status: "idle" }); // idle | uploading | success | error
   const fileInputRef = useRef(null);
+
+  const [tipProperty, setTipProperty] = useState(location !== "All Locations" ? location : "");
+  const [tipAmount, setTipAmount] = useState("");
+  const [tipState, setTipState] = useState({ status: "idle" });
+  const [recentTips, setRecentTips] = useState([]);
+  const [tipsLoading, setTipsLoading] = useState(true);
+
+  const loadRecentTips = useCallback(async () => {
+    if (!canUpload) return;
+    setTipsLoading(true);
+    try {
+      const res = await fetch("/api/tips");
+      const json = await res.json();
+      if (res.ok) setRecentTips(json.tips || []);
+    } catch {
+      // non-fatal
+    } finally {
+      setTipsLoading(false);
+    }
+  }, [canUpload]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
+    loadRecentTips();
+  }, [loadRecentTips]);
+
+  useEffect(() => {
+    if (location !== "All Locations") setTipProperty(location);
+  }, [location]);
+
+  async function handleTipSubmit(e) {
+    e.preventDefault();
+    if (!tipProperty.trim()) {
+      setTipState({ status: "error", message: "Property is required." });
+      return;
+    }
+    setTipState({ status: "saving" });
+    try {
+      const res = await fetch("/api/tips", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ property: tipProperty.trim(), weekStart: start, weekEnd: end, amount: tipAmount }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setTipState({ status: "error", message: json.error });
+        return;
+      }
+      setTipState({ status: "success" });
+      setTipAmount("");
+      loadRecentTips();
+    } catch {
+      setTipState({ status: "error", message: "Save failed — check your connection and try again." });
+    }
+  }
 
   const loadUploads = useCallback(async () => {
     if (!canUpload) return;
@@ -152,6 +209,72 @@ export default function RevenuePage() {
                       <td style={{ padding: "8px 12px", fontSize: 11, color: "#94a3b8" }}>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><FileSpreadsheet size={11} /> {u.sourceFileName}</span>
                       </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        {/* Weekly Tips */}
+        <div style={{ background: "white", borderRadius: 8, border: "1px solid #e2e8f0", padding: 20, marginTop: 14, marginBottom: 14 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: "#0f172a", marginBottom: 4 }}>Weekly Tips</div>
+          <div style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>
+            One entry per property per week — matches the payroll week currently selected ({formatDateRangeLabel(start, end)}). Re-submitting the same week corrects it.
+          </div>
+
+          <form onSubmit={handleTipSubmit} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: tipState.status !== "idle" ? 12 : 0 }}>
+            <div>
+              <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Property</label>
+              <input value={tipProperty} onChange={(e) => setTipProperty(e.target.value)} placeholder="e.g. Lake Buena Vista"
+                style={{ padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, width: 200 }} />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Tip Amount ($)</label>
+              <input type="number" min="0" step="0.01" value={tipAmount} onChange={(e) => setTipAmount(e.target.value)} placeholder="0.00" required
+                style={{ padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, width: 140 }} />
+            </div>
+            <button type="submit" disabled={tipState.status === "saving"} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", border: "none", borderRadius: 6, background: "#2563eb", color: "white", fontSize: 12, fontWeight: 600, cursor: tipState.status === "saving" ? "default" : "pointer" }}>
+              <DollarSign size={13} /> {tipState.status === "saving" ? "Saving..." : "Save"}
+            </button>
+          </form>
+
+          {tipState.status === "success" && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#dcfce7", border: "1px solid #bbf7d0", borderRadius: 6, padding: "8px 12px", fontSize: 12, color: "#166534" }}>
+              <CheckCircle size={13} /> Saved.
+            </div>
+          )}
+          {tipState.status === "error" && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "8px 12px", fontSize: 12, color: "#b91c1c" }}>
+              <AlertTriangle size={13} /> {tipState.message}
+            </div>
+          )}
+        </div>
+
+        <div style={{ background: "white", borderRadius: 8, border: "1px solid #e2e8f0", overflow: "hidden", marginBottom: 14 }}>
+          <div style={{ padding: "10px 14px", borderBottom: "1px solid #f1f5f9", fontWeight: 700, fontSize: 13, color: "#0f172a" }}>Recent Tips</div>
+          {tipsLoading ? (
+            <div style={{ padding: "16px 14px", fontSize: 12, color: "#94a3b8" }}>Loading...</div>
+          ) : recentTips.length === 0 ? (
+            <div style={{ padding: "16px 14px", fontSize: 12, color: "#94a3b8" }}>No tips entered yet.</div>
+          ) : (
+            <div className="table-scroll">
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 480 }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc" }}>
+                    {["Property", "Week", "Amount", "Entered By", "Entered At"].map(h => (
+                      <th key={h} style={{ padding: "7px 12px", textAlign: "left", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentTips.map((t, i) => (
+                    <tr key={i} style={{ borderBottom: "1px solid #f8fafc" }}>
+                      <td style={{ padding: "8px 12px", fontSize: 12, fontWeight: 600, color: "#0f172a" }}>{t.property}</td>
+                      <td style={{ padding: "8px 12px", fontSize: 12, color: "#475569", whiteSpace: "nowrap" }}>{t.weekStart} – {t.weekEnd}</td>
+                      <td style={{ padding: "8px 12px", fontSize: 12, fontWeight: 600 }}>${t.amount?.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                      <td style={{ padding: "8px 12px", fontSize: 12, color: "#475569" }}>{t.enteredBy}</td>
+                      <td style={{ padding: "8px 12px", fontSize: 11, color: "#94a3b8", whiteSpace: "nowrap" }}>{new Date(t.enteredAt).toLocaleString("en-US")}</td>
                     </tr>
                   ))}
                 </tbody>
