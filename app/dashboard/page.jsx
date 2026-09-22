@@ -15,8 +15,10 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, Legend,
   LineChart, Line,
 } from "recharts";
-import { DollarSign, Users, Grid3X3, AlertTriangle, CheckCircle, Clock, ChevronRight } from "lucide-react";
+import { DollarSign, Users, Grid3X3, AlertTriangle, CheckCircle, Clock, ChevronRight, TrendingUp, Percent, BedDouble } from "lucide-react";
 import Link from "next/link";
+import { useRevenueSnapshot } from "@/hooks/useRevenueSnapshot";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 const DEPT_COLORS = ["#1e40af","#2563eb","#7c3aed","#0891b2","#059669","#d97706"];
 
@@ -27,6 +29,15 @@ export default function Dashboard() {
   const departmentTotals = data?.departmentTotals ?? [];
   const GRAND_TOTAL = data?.grandTotal || 0;
   const CURRENT_PERIOD_TOTALS = data?.currentPeriodTotals ?? { regularHours: 0, otHours: 0, holidayHours: 0, totalHours: 0, totalCost: 0 };
+  const { snapshot: revenue, loading: revenueLoading, error: revenueError } = useRevenueSnapshot();
+  const { user: currentUser } = useCurrentUser();
+  const currentRole = currentUser?.role;
+
+  const housekeepingHours = employees
+    .filter((e) => e.departmentGroup === "Housekeeping")
+    .reduce((s, e) => s + e.regularHours + e.otHours, 0);
+  const minutesPerRoom = revenue?.bookedRooms > 0 ? (housekeepingHours * 60) / revenue.bookedRooms : null;
+  const laborCostPct = revenue?.totalRevenue > 0 ? (GRAND_TOTAL / revenue.totalRevenue) * 100 : null;
 
   const deptPayrollData = departmentTotals
     .filter(d => d.total > 0)
@@ -109,6 +120,54 @@ export default function Dashboard() {
             </div>
           )))}
         </div>
+
+        {/* Revenue & Labor Efficiency — from uploaded property revenue data */}
+        <div style={{ marginBottom: 6 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Revenue & Labor Efficiency</div>
+        </div>
+        {revenueError ? (
+          <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "12px 14px", marginBottom: 14, fontSize: 12, color: "#b91c1c" }}>{revenueError}</div>
+        ) : !revenueLoading && !revenue ? (
+          <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 8, padding: "16px", marginBottom: 14, fontSize: 12, color: "#64748b" }}>
+            No revenue data uploaded yet for {location}. {(currentRole === "Admin" || currentRole === "Payroll Manager") && <Link href="/revenue" style={{ color: "#2563eb", fontWeight: 600 }}>Upload revenue data →</Link>}
+          </div>
+        ) : (
+        <div className="grid-kpi-4" style={{ marginBottom: 14 }}>
+          {revenueLoading ? (
+            Array.from({ length: 4 }).map((_, i) => <SkeletonKpiCard key={i} />)
+          ) : [
+            { label: "Total Revenue",  value: "$" + (revenue.totalRevenue || 0).toLocaleString("en-US"), icon: TrendingUp, color: "#2563eb" },
+            { label: "Labor Cost % of Revenue", value: laborCostPct != null ? laborCostPct.toFixed(1) + "%" : "—", icon: Percent, color: "#d97706" },
+            { label: "ADR",  value: "$" + (revenue.adr || 0).toFixed(2), icon: DollarSign, color: "#059669" },
+            { label: "RevPAR", value: "$" + (revenue.revpar || 0).toFixed(2), icon: BedDouble, color: "#7c3aed" },
+          ].map((s, i) => (
+            <div key={i} style={{ background: "white", borderRadius: 8, border: "1px solid #e2e8f0", padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ background: s.color + "15", borderRadius: 8, padding: 9, flexShrink: 0 }}>
+                <s.icon size={18} color={s.color} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 20, fontWeight: 800, color: "#0f172a" }}>{s.value}</div>
+                <div style={{ fontSize: 11, color: "#64748b", fontWeight: 500 }}>{s.label}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        )}
+        {!revenueLoading && revenue && (
+        <div className="grid-kpi-4" style={{ marginBottom: 14 }}>
+          {[
+            { label: "Occupancy",  value: (revenue.occupancyPct || 0).toFixed(1) + "%", color: "#2563eb" },
+            { label: "Minutes per Room", value: minutesPerRoom != null ? minutesPerRoom.toFixed(1) + " min" : "— (no Booked Rooms on file)", color: "#7c3aed" },
+            { label: "Booked Rooms", value: (revenue.bookedRooms || 0).toLocaleString("en-US"), color: "#0f172a" },
+            { label: "Room Revenue", value: "$" + (revenue.roomRevenue || 0).toLocaleString("en-US"), color: "#059669" },
+          ].map((c, i) => (
+            <div key={i} style={{ background: "white", borderRadius: 8, border: "1px solid #e2e8f0", padding: "12px 14px" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>{c.label}</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: c.color }}>{c.value}</div>
+            </div>
+          ))}
+        </div>
+        )}
 
         {/* Charts Row */}
         <div className="grid-chart-2" style={{ marginBottom: 14 }}>

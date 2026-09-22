@@ -3,15 +3,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Users, DollarSign, Grid3X3,
-  FileText, Settings, ChevronLeft, ChevronRight, Building2, Menu, X, Network
+  FileText, Settings, ChevronLeft, ChevronRight, Building2, Menu, X, Network, TrendingUp
 } from "lucide-react";
 import { useState } from "react";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 const navItems = [
   { href: "/dashboard",   label: "Dashboard",  icon: LayoutDashboard },
   { href: "/employees",   label: "Employees",  icon: Users },
   { href: "/departments", label: "Departments",icon: Grid3X3 },
   { href: "/payroll",     label: "Payroll",    icon: DollarSign },
+  { href: "/revenue",     label: "Revenue",    icon: TrendingUp, roles: ["Admin", "Payroll Manager"] },
   { href: "/reports",     label: "Reports",    icon: FileText },
   { href: "/settings",    label: "Settings",   icon: Settings },
 ];
@@ -28,6 +30,8 @@ export default function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { user: currentUser } = useCurrentUser();
+  const visibleNavItems = navItems.filter((item) => !item.roles || item.roles.includes(currentUser?.role));
 
   return (
     <>
@@ -54,7 +58,7 @@ export default function Sidebar() {
 
         {/* Nav */}
         <nav style={{ flex: 1, padding: "10px 8px", overflowY: "auto" }}>
-          {navItems.map(({ href, label, icon: Icon }) => {
+          {visibleNavItems.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || pathname.startsWith(href + "/");
             return (
               <Link key={href} href={href} style={{
@@ -106,7 +110,7 @@ export default function Sidebar() {
           </button>
         </div>
         <nav style={{ flex: 1, padding: "10px 8px", overflowY: "auto" }}>
-          {navItems.map(({ href, label, icon: Icon }) => {
+          {visibleNavItems.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || pathname.startsWith(href + "/");
             return (
               <Link key={href} href={href} onClick={() => setMobileOpen(false)} style={{
