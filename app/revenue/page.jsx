@@ -5,12 +5,15 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useLocationFilter } from "@/contexts/LocationContext";
 import { useDateRange, formatDateRangeLabel } from "@/contexts/DateRangeContext";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Download, Upload, CheckCircle, AlertTriangle, FileSpreadsheet, DollarSign } from "lucide-react";
+import { Download, Upload, CheckCircle, AlertTriangle, FileSpreadsheet, DollarSign, Plus, X } from "lucide-react";
+import { useFilteredPayrollDataset } from "@/hooks/useFilteredPayrollDataset";
 
 export default function RevenuePage() {
   const { user: currentUser, loading: userLoading } = useCurrentUser();
   const { location } = useLocationFilter();
   const { start, end } = useDateRange();
+  const { locations } = useFilteredPayrollDataset();
+  const realLocations = locations.filter((l) => l !== "All Locations");
   const canUpload = currentUser?.role === "Admin" || currentUser?.role === "Payroll Manager";
 
   const [uploads, setUploads] = useState([]);
@@ -18,8 +21,7 @@ export default function RevenuePage() {
   const [uploadState, setUploadState] = useState({ status: "idle" }); // idle | uploading | success | error
   const fileInputRef = useRef(null);
 
-  const [tipProperty, setTipProperty] = useState(location !== "All Locations" ? location : "");
-  const [tipAmount, setTipAmount] = useState("");
+  const [tipRows, setTipRows] = useState([{ property: location !== "All Locations" ? location : "", amount: "" }]);
   const [tipState, setTipState] = useState({ status: "idle" });
   const [recentTips, setRecentTips] = useState([]);
   const [tipsLoading, setTipsLoading] = useState(true);
@@ -44,29 +46,48 @@ export default function RevenuePage() {
   }, [loadRecentTips]);
 
   useEffect(() => {
-    if (location !== "All Locations") setTipProperty(location);
+    if (location !== "All Locations") {
+      setTipRows((rows) => (rows.length === 1 && !rows[0].property && !rows[0].amount ? [{ property: location, amount: "" }] : rows));
+    }
   }, [location]);
+
+  function updateTipRow(index, field, value) {
+    setTipRows((rows) => rows.map((r, i) => (i === index ? { ...r, [field]: value } : r)));
+  }
+
+  function addTipRow() {
+    setTipRows((rows) => [...rows, { property: "", amount: "" }]);
+  }
+
+  function removeTipRow(index) {
+    setTipRows((rows) => (rows.length > 1 ? rows.filter((_, i) => i !== index) : rows));
+  }
 
   async function handleTipSubmit(e) {
     e.preventDefault();
-    if (!tipProperty.trim()) {
-      setTipState({ status: "error", message: "Property is required." });
+    const validRows = tipRows.filter((r) => r.property && r.amount !== "");
+    if (validRows.length === 0) {
+      setTipState({ status: "error", message: "Fill in at least one property and amount." });
       return;
     }
     setTipState({ status: "saving" });
     try {
-      const res = await fetch("/api/tips", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ property: tipProperty.trim(), weekStart: start, weekEnd: end, amount: tipAmount }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setTipState({ status: "error", message: json.error });
+      const results = await Promise.all(
+        validRows.map((row) =>
+          fetch("/api/tips", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ property: row.property, weekStart: start, weekEnd: end, amount: row.amount }),
+          }).then(async (res) => ({ ok: res.ok, property: row.property, error: (await res.json().catch(() => ({}))).error }))
+        )
+      );
+      const failed = results.filter((r) => !r.ok);
+      if (failed.length > 0) {
+        setTipState({ status: "error", message: failed.map((f) => `${f.property}: ${f.error}`).join(" · ") });
         return;
       }
       setTipState({ status: "success" });
-      setTipAmount("");
+      setTipRows([{ property: location !== "All Locations" ? location : "", amount: "" }]);
       loadRecentTips();
     } catch {
       setTipState({ status: "error", message: "Save failed — check your connection and try again." });
@@ -223,19 +244,36 @@ export default function RevenuePage() {
             One entry per property per week — matches the payroll week currently selected ({formatDateRangeLabel(start, end)}). Re-submitting the same week corrects it.
           </div>
 
-          <form onSubmit={handleTipSubmit} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: tipState.status !== "idle" ? 12 : 0 }}>
-            <div>
-              <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Property</label>
-              <input value={tipProperty} onChange={(e) => setTipProperty(e.target.value)} placeholder="e.g. Lake Buena Vista"
-                style={{ padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, width: 200 }} />
-            </div>
-            <div>
-              <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Tip Amount ($)</label>
-              <input type="number" min="0" step="0.01" value={tipAmount} onChange={(e) => setTipAmount(e.target.value)} placeholder="0.00" required
-                style={{ padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, width: 140 }} />
-            </div>
-            <button type="submit" disabled={tipState.status === "saving"} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", border: "none", borderRadius: 6, background: "#2563eb", color: "white", fontSize: 12, fontWeight: 600, cursor: tipState.status === "saving" ? "default" : "pointer" }}>
-              <DollarSign size={13} /> {tipState.status === "saving" ? "Saving..." : "Save"}
+          <form onSubmit={handleTipSubmit} style={{ marginBottom: tipState.status !== "idle" ? 12 : 0 }}>
+            {tipRows.map((row, i) => (
+              <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: 8 }}>
+                <div>
+                  {i === 0 && <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Property</label>}
+                  <select value={row.property} onChange={(e) => updateTipRow(i, "property", e.target.value)}
+                    style={{ padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, width: 220 }}>
+                    <option value="">Select a property...</option>
+                    {realLocations.map((loc) => <option key={loc} value={loc}>{loc}</option>)}
+                  </select>
+                </div>
+                <div>
+                  {i === 0 && <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Tip Amount ($)</label>}
+                  <input type="number" min="0" step="0.01" value={row.amount} onChange={(e) => updateTipRow(i, "amount", e.target.value)} placeholder="0.00"
+                    style={{ padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, width: 140 }} />
+                </div>
+                {tipRows.length > 1 && (
+                  <button type="button" onClick={() => removeTipRow(i)} title="Remove row" style={{ padding: 8, border: "1px solid #e2e8f0", borderRadius: 6, background: "white", color: "#94a3b8", cursor: "pointer" }}>
+                    <X size={14} />
+                  </button>
+                )}
+                {i === tipRows.length - 1 && (
+                  <button type="button" onClick={addTipRow} title="Add another property" style={{ padding: 8, border: "1px solid #dbeafe", borderRadius: 6, background: "#eff6ff", color: "#1d4ed8", cursor: "pointer" }}>
+                    <Plus size={14} />
+                  </button>
+                )}
+              </div>
+            ))}
+            <button type="submit" disabled={tipState.status === "saving"} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", border: "none", borderRadius: 6, background: "#2563eb", color: "white", fontSize: 12, fontWeight: 600, cursor: tipState.status === "saving" ? "default" : "pointer", marginTop: 4 }}>
+              <DollarSign size={13} /> {tipState.status === "saving" ? "Saving..." : "Save All"}
             </button>
           </form>
 

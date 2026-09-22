@@ -1,7 +1,7 @@
 "use client";
 import AppLayout from "@/components/AppLayout";
 import Header from "@/components/Header";
-import { Download, FileText, Calendar, BarChart2, Users, DollarSign, Clock, Grid3X3, CalendarClock, ArrowRight, Trash2, Pause, Play } from "lucide-react";
+import { Download, FileText, Calendar, BarChart2, Users, DollarSign, Clock, Grid3X3, CalendarClock, ArrowRight, Trash2, Pause, Play, Send } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
 import { useFilteredPayrollDataset } from "@/hooks/useFilteredPayrollDataset";
@@ -60,6 +60,7 @@ export default function ReportsPage() {
   const [scheduleModalReport, setScheduleModalReport] = useState(null);
   const [subscriptions, setSubscriptions] = useState([]);
   const [subsLoading, setSubsLoading] = useState(true);
+  const [sendNowState, setSendNowState] = useState({});
 
   const loadSubscriptions = useCallback(async () => {
     if (!canExport) return;
@@ -92,6 +93,22 @@ export default function ReportsPage() {
   async function deleteSubscription(sub) {
     await fetch(`/api/report-subscriptions/${sub._id}`, { method: "DELETE" });
     loadSubscriptions();
+  }
+
+  async function sendNow(sub) {
+    setSendNowState((s) => ({ ...s, [sub._id]: { status: "sending" } }));
+    try {
+      const res = await fetch(`/api/report-subscriptions/${sub._id}/send-now`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) {
+        setSendNowState((s) => ({ ...s, [sub._id]: { status: "error", message: json.error } }));
+        return;
+      }
+      setSendNowState((s) => ({ ...s, [sub._id]: { status: "sent" } }));
+      loadSubscriptions();
+    } catch {
+      setSendNowState((s) => ({ ...s, [sub._id]: { status: "error", message: "Send failed — check your connection." } }));
+    }
   }
   const HISTORICAL_KEYS = ["payroll-hours-schedule", "payroll-history-summary"];
   const { weeklyTotals, loading: trendLoading } = useWeeklyTrend(13);
@@ -198,12 +215,24 @@ export default function ReportsPage() {
                           <span style={{ background: sub.active ? "#dcfce7" : "#f1f5f9", color: sub.active ? "#16a34a" : "#94a3b8", padding: "2px 7px", borderRadius: 999, fontSize: 10, fontWeight: 600 }}>{sub.active ? "Active" : "Paused"}</span>
                         </td>
                         <td style={{ padding: "8px 12px", whiteSpace: "nowrap" }}>
+                          <button onClick={() => sendNow(sub)} disabled={sendNowState[sub._id]?.status === "sending"} title="Send Now (test)" style={{ background: "none", border: "none", cursor: sendNowState[sub._id]?.status === "sending" ? "default" : "pointer", color: "#2563eb", marginRight: 8 }}>
+                            <Send size={13} />
+                          </button>
                           <button onClick={() => toggleSubscription(sub)} title={sub.active ? "Pause" : "Resume"} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", marginRight: 8 }}>
                             {sub.active ? <Pause size={13} /> : <Play size={13} />}
                           </button>
                           <button onClick={() => deleteSubscription(sub)} title="Delete" style={{ background: "none", border: "none", cursor: "pointer", color: "#dc2626" }}>
                             <Trash2 size={13} />
                           </button>
+                          {sendNowState[sub._id]?.status === "sending" && (
+                            <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>Sending...</div>
+                          )}
+                          {sendNowState[sub._id]?.status === "sent" && (
+                            <div style={{ fontSize: 10, color: "#16a34a", marginTop: 4 }}>Sent ✓</div>
+                          )}
+                          {sendNowState[sub._id]?.status === "error" && (
+                            <div style={{ fontSize: 10, color: "#dc2626", marginTop: 4, maxWidth: 180, whiteSpace: "normal" }}>{sendNowState[sub._id].message}</div>
+                          )}
                         </td>
                       </tr>
                     );
