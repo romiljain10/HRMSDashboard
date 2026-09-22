@@ -8,6 +8,8 @@ import { useFilteredPayrollDataset } from "@/hooks/useFilteredPayrollDataset";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { REPORTS_CATALOG } from "@/lib/reports/catalog";
 import { buildNotifications } from "@/lib/notifications";
+import { useRevenueSnapshot } from "@/hooks/useRevenueSnapshot";
+import { useWeeklyTips } from "@/hooks/useWeeklyTips";
 
 export default function Header({ title, subtitle, locations }) {
   const router = useRouter();
@@ -23,11 +25,19 @@ export default function Header({ title, subtitle, locations }) {
 
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef(null);
-  const notifications = useMemo(() => buildNotifications(data), [data]);
+  const { user: currentUser } = useCurrentUser();
+  const canManageData = currentUser?.role === "Admin" || currentUser?.role === "Payroll Manager";
+  const { snapshot: revenue, loading: revenueLoading } = useRevenueSnapshot();
+  const { enteredForCurrentSelection: tipsEntered, loading: tipsLoading } = useWeeklyTips();
+  const notifications = useMemo(
+    () => buildNotifications(data, { revenue, revenueLoading, tipsEntered, tipsLoading, canManageData, location }),
+    [data, revenue, revenueLoading, tipsEntered, tipsLoading, canManageData, location]
+  );
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
-  const { user: currentUser } = useCurrentUser();
+  const [helpOpen, setHelpOpen] = useState(false);
+  const helpRef = useRef(null);
   const initials = currentUser?.name ? currentUser.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() : "?";
 
   useEffect(() => {
@@ -35,6 +45,7 @@ export default function Header({ title, subtitle, locations }) {
       if (searchBoxRef.current && !searchBoxRef.current.contains(e.target)) setSearchOpen(false);
       if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
       if (userMenuRef.current && !userMenuRef.current.contains(e.target)) setUserMenuOpen(false);
+      if (helpRef.current && !helpRef.current.contains(e.target)) setHelpOpen(false);
     }
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
@@ -233,9 +244,33 @@ export default function Header({ title, subtitle, locations }) {
         </div>
 
         {/* Help — hidden on mobile */}
-        <button className="header-help" style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", padding: 4 }}>
-          <HelpCircle size={18} />
-        </button>
+        <div ref={helpRef} style={{ position: "relative" }}>
+          <button className="header-help" onClick={() => setHelpOpen((o) => !o)} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", padding: 4 }}>
+            <HelpCircle size={18} />
+          </button>
+          {helpOpen && (
+            <div style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", background: "white", border: "1px solid #e2e8f0", borderRadius: 8, boxShadow: "0 8px 24px rgba(15,23,42,0.12)", zIndex: 60, width: 260, overflow: "hidden" }}>
+              <div style={{ padding: "10px 12px", borderBottom: "1px solid #f1f5f9", fontSize: 11, fontWeight: 700, color: "#0f172a" }}>Quick Help</div>
+              <div style={{ padding: "8px 0" }}>
+                {[
+                  { label: "Dashboard — headcount, payroll, revenue KPIs", href: "/dashboard" },
+                  { label: "Employees — directory, hours, contact info", href: "/employees" },
+                  { label: "Payroll — approvals, PTO, burden breakdown", href: "/payroll" },
+                  { label: "Revenue — upload data, enter weekly tips", href: "/revenue" },
+                  { label: "Reports — exports & scheduled emails", href: "/reports" },
+                  { label: "Settings — team access & roles", href: "/settings" },
+                ].map((item) => (
+                  <button key={item.href} onClick={() => { setHelpOpen(false); router.push(item.href); }} style={{ display: "block", width: "100%", padding: "6px 12px", border: "none", background: "none", fontSize: 11, color: "#475569", textAlign: "left", cursor: "pointer" }}>
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <div style={{ padding: "8px 12px", borderTop: "1px solid #f1f5f9", fontSize: 10, color: "#94a3b8" }}>
+                Need something else? Contact your system administrator.
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* User avatar always, label hidden on mobile */}
         <div ref={userMenuRef} style={{ position: "relative" }}>

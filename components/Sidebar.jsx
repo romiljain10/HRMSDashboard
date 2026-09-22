@@ -39,11 +39,14 @@ export default function Sidebar() {
       <aside className="desktop-sidebar" style={{
         width: collapsed ? 64 : 230,
         background: "#0f2044",
-        minHeight: "100vh",
+        height: "100vh",
+        position: "sticky",
+        top: 0,
         display: "flex",
         flexDirection: "column",
         transition: "width 0.2s",
         flexShrink: 0,
+        overflow: "hidden",
       }}>
         {/* Logo */}
         <div style={{ padding: collapsed ? "14px 10px" : "14px 16px", borderBottom: "1px solid #1e3a5f", display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-start" }}>

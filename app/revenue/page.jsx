@@ -21,7 +21,7 @@ export default function RevenuePage() {
   const [uploadState, setUploadState] = useState({ status: "idle" }); // idle | uploading | success | error
   const fileInputRef = useRef(null);
 
-  const [tipRows, setTipRows] = useState([{ property: location !== "All Locations" ? location : "", amount: "" }]);
+  const [tipRows, setTipRows] = useState([{ property: location !== "All Locations" ? location : "", amount: "", weekStart: start, weekEnd: end }]);
   const [tipState, setTipState] = useState({ status: "idle" });
   const [recentTips, setRecentTips] = useState([]);
   const [tipsLoading, setTipsLoading] = useState(true);
@@ -47,16 +47,16 @@ export default function RevenuePage() {
 
   useEffect(() => {
     if (location !== "All Locations") {
-      setTipRows((rows) => (rows.length === 1 && !rows[0].property && !rows[0].amount ? [{ property: location, amount: "" }] : rows));
+      setTipRows((rows) => (rows.length === 1 && !rows[0].property && !rows[0].amount ? [{ property: location, amount: "", weekStart: start, weekEnd: end }] : rows));
     }
-  }, [location]);
+  }, [location, start, end]);
 
   function updateTipRow(index, field, value) {
     setTipRows((rows) => rows.map((r, i) => (i === index ? { ...r, [field]: value } : r)));
   }
 
   function addTipRow() {
-    setTipRows((rows) => [...rows, { property: "", amount: "" }]);
+    setTipRows((rows) => [...rows, { property: "", amount: "", weekStart: start, weekEnd: end }]);
   }
 
   function removeTipRow(index) {
@@ -65,9 +65,14 @@ export default function RevenuePage() {
 
   async function handleTipSubmit(e) {
     e.preventDefault();
-    const validRows = tipRows.filter((r) => r.property && r.amount !== "");
+    const validRows = tipRows.filter((r) => r.property && r.amount !== "" && r.weekStart && r.weekEnd);
     if (validRows.length === 0) {
-      setTipState({ status: "error", message: "Fill in at least one property and amount." });
+      setTipState({ status: "error", message: "Fill in property, amount, and both dates for at least one row." });
+      return;
+    }
+    const badDates = validRows.filter((r) => r.weekStart > r.weekEnd);
+    if (badDates.length > 0) {
+      setTipState({ status: "error", message: `${badDates[0].property || "A row"}: From date is after To date.` });
       return;
     }
     setTipState({ status: "saving" });
@@ -77,7 +82,7 @@ export default function RevenuePage() {
           fetch("/api/tips", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ property: row.property, weekStart: start, weekEnd: end, amount: row.amount }),
+            body: JSON.stringify({ property: row.property, weekStart: row.weekStart, weekEnd: row.weekEnd, amount: row.amount }),
           }).then(async (res) => ({ ok: res.ok, property: row.property, error: (await res.json().catch(() => ({}))).error }))
         )
       );
@@ -87,7 +92,7 @@ export default function RevenuePage() {
         return;
       }
       setTipState({ status: "success" });
-      setTipRows([{ property: location !== "All Locations" ? location : "", amount: "" }]);
+      setTipRows([{ property: location !== "All Locations" ? location : "", amount: "", weekStart: start, weekEnd: end }]);
       loadRecentTips();
     } catch {
       setTipState({ status: "error", message: "Save failed — check your connection and try again." });
@@ -241,7 +246,7 @@ export default function RevenuePage() {
         <div style={{ background: "white", borderRadius: 8, border: "1px solid #e2e8f0", padding: 20, marginTop: 14, marginBottom: 14 }}>
           <div style={{ fontWeight: 700, fontSize: 14, color: "#0f172a", marginBottom: 4 }}>Weekly Tips</div>
           <div style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>
-            One entry per property per week — matches the payroll week currently selected ({formatDateRangeLabel(start, end)}). Re-submitting the same week corrects it.
+            One entry per property per week — dates default to the currently selected period ({formatDateRangeLabel(start, end)}) but can be changed per row. Re-submitting the same property/week corrects it.
           </div>
 
           <form onSubmit={handleTipSubmit} style={{ marginBottom: tipState.status !== "idle" ? 12 : 0 }}>
@@ -259,6 +264,16 @@ export default function RevenuePage() {
                   {i === 0 && <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Tip Amount ($)</label>}
                   <input type="number" min="0" step="0.01" value={row.amount} onChange={(e) => updateTipRow(i, "amount", e.target.value)} placeholder="0.00"
                     style={{ padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, width: 140 }} />
+                </div>
+                <div>
+                  {i === 0 && <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>From</label>}
+                  <input type="date" value={row.weekStart} max={row.weekEnd} onChange={(e) => updateTipRow(i, "weekStart", e.target.value)}
+                    style={{ padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, width: 150 }} />
+                </div>
+                <div>
+                  {i === 0 && <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>To</label>}
+                  <input type="date" value={row.weekEnd} min={row.weekStart} onChange={(e) => updateTipRow(i, "weekEnd", e.target.value)}
+                    style={{ padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, width: 150 }} />
                 </div>
                 {tipRows.length > 1 && (
                   <button type="button" onClick={() => removeTipRow(i)} title="Remove row" style={{ padding: 8, border: "1px solid #e2e8f0", borderRadius: 6, background: "white", color: "#94a3b8", cursor: "pointer" }}>
