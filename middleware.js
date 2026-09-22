@@ -4,8 +4,12 @@ import { SESSION_COOKIE_NAME, verifySession, getConfiguredUsers } from "@/lib/au
 export async function middleware(request) {
   const { pathname } = request.nextUrl;
 
-  // Always allow the login page itself and the auth API routes.
-  if (pathname.startsWith("/login") || pathname.startsWith("/api/auth")) {
+  // Always allow the login page itself, the auth API routes, and the cron
+  // endpoint — Vercel's cron trigger has no login session, only the
+  // Authorization: Bearer CRON_SECRET header, which the route checks
+  // itself. Without this exemption, every scheduled run would silently
+  // get redirected to /login before ever reaching that check.
+  if (pathname.startsWith("/login") || pathname.startsWith("/api/auth") || pathname.startsWith("/api/cron")) {
     return NextResponse.next();
   }
 

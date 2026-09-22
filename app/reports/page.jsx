@@ -1,15 +1,16 @@
 "use client";
 import AppLayout from "@/components/AppLayout";
 import Header from "@/components/Header";
-import { Download, FileText, Calendar, BarChart2, Users, DollarSign, Clock, Grid3X3, CalendarClock, ArrowRight } from "lucide-react";
+import { Download, FileText, Calendar, BarChart2, Users, DollarSign, Clock, Grid3X3, CalendarClock, ArrowRight, Trash2, Pause, Play } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useFilteredPayrollDataset } from "@/hooks/useFilteredPayrollDataset";
 import { useDateRange, formatDateRangeLabel } from "@/contexts/DateRangeContext";
 import { buildReportRows } from "@/lib/reports/buildRows";
 import { exportCSV, exportXLSX, exportPDF } from "@/lib/reports/exportFile";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useWeeklyTrend } from "@/hooks/useWeeklyTrend";
+import ScheduleModal from "@/components/ScheduleModal";
 
 const reports = [
   {
@@ -56,6 +57,42 @@ export default function ReportsPage() {
   const canExport = !currentUser || currentUser.role !== "Viewer";
   const today = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   const [emptyNotice, setEmptyNotice] = useState(null);
+  const [scheduleModalReport, setScheduleModalReport] = useState(null);
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [subsLoading, setSubsLoading] = useState(true);
+
+  const loadSubscriptions = useCallback(async () => {
+    if (!canExport) return;
+    setSubsLoading(true);
+    try {
+      const res = await fetch("/api/report-subscriptions");
+      const json = await res.json();
+      if (res.ok) setSubscriptions(json.subscriptions || []);
+    } catch {
+      // non-fatal
+    } finally {
+      setSubsLoading(false);
+    }
+  }, [canExport]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
+    loadSubscriptions();
+  }, [loadSubscriptions]);
+
+  async function toggleSubscription(sub) {
+    await fetch(`/api/report-subscriptions/${sub._id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ active: !sub.active }),
+    });
+    loadSubscriptions();
+  }
+
+  async function deleteSubscription(sub) {
+    await fetch(`/api/report-subscriptions/${sub._id}`, { method: "DELETE" });
+    loadSubscriptions();
+  }
   const HISTORICAL_KEYS = ["payroll-hours-schedule", "payroll-history-summary"];
   const { weeklyTotals, loading: trendLoading } = useWeeklyTrend(13);
 
@@ -108,9 +145,11 @@ export default function ReportsPage() {
                       }) : (
                         <span style={{ fontSize: 10, color: "#94a3b8", fontStyle: "italic" }}>Export requires Payroll Manager or Admin access</span>
                       )}
-                      <button style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 9px", border: "1px solid #dbeafe", borderRadius: 5, background: "#dbeafe", color: "#1d4ed8", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
-                        <Calendar size={11} /> Schedule
-                      </button>
+                      {canExport && (
+                        <button onClick={() => setScheduleModalReport(report)} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 9px", border: "1px solid #dbeafe", borderRadius: 5, background: "#dbeafe", color: "#1d4ed8", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                          <Calendar size={11} /> Schedule
+                        </button>
+                      )}
                       <span style={{ fontSize: 10, color: "#94a3b8", marginLeft: "auto" }}>Last: {today}</span>
                     </div>
                     {emptyNotice === report.key && (
@@ -124,7 +163,66 @@ export default function ReportsPage() {
             </div>
           </div>
         ))}
+
+        {/* Manage Schedules */}
+        {canExport && (
+        <div style={{ background: "white", borderRadius: 8, border: "1px solid #e2e8f0", overflow: "hidden" }}>
+          <div style={{ padding: "10px 14px", borderBottom: "1px solid #f1f5f9", fontWeight: 700, fontSize: 13, color: "#0f172a" }}>Scheduled Reports</div>
+          {subsLoading ? (
+            <div style={{ padding: "16px 14px", fontSize: 12, color: "#94a3b8" }}>Loading...</div>
+          ) : subscriptions.length === 0 ? (
+            <div style={{ padding: "16px 14px", fontSize: 12, color: "#94a3b8" }}>No scheduled reports yet — click "Schedule" on any report above to set one up.</div>
+          ) : (
+            <div className="table-scroll">
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc" }}>
+                    {["Report", "Recipients", "Frequency", "Format", "Last Sent", "Status", ""].map(h => (
+                      <th key={h} style={{ padding: "7px 12px", textAlign: "left", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {subscriptions.map((sub) => {
+                    const report = [...reports.flatMap(c => c.items)].find(r => r.key === sub.reportKey);
+                    return (
+                      <tr key={sub._id} style={{ borderBottom: "1px solid #f8fafc" }}>
+                        <td style={{ padding: "8px 12px", fontSize: 12, fontWeight: 600, color: "#0f172a" }}>{report?.name || sub.reportKey}</td>
+                        <td style={{ padding: "8px 12px", fontSize: 11, color: "#475569" }}>{sub.recipients.join(", ")}</td>
+                        <td style={{ padding: "8px 12px", fontSize: 12 }}>
+                          {sub.frequency === "weekly" ? `Weekly (${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][sub.dayOfWeek]})` : `Monthly (day ${sub.dayOfMonth})`}
+                        </td>
+                        <td style={{ padding: "8px 12px", fontSize: 12 }}>{sub.format}</td>
+                        <td style={{ padding: "8px 12px", fontSize: 11, color: "#94a3b8", whiteSpace: "nowrap" }}>{sub.lastSentAt ? new Date(sub.lastSentAt).toLocaleDateString("en-US") : "Never"}</td>
+                        <td style={{ padding: "8px 12px" }}>
+                          <span style={{ background: sub.active ? "#dcfce7" : "#f1f5f9", color: sub.active ? "#16a34a" : "#94a3b8", padding: "2px 7px", borderRadius: 999, fontSize: 10, fontWeight: 600 }}>{sub.active ? "Active" : "Paused"}</span>
+                        </td>
+                        <td style={{ padding: "8px 12px", whiteSpace: "nowrap" }}>
+                          <button onClick={() => toggleSubscription(sub)} title={sub.active ? "Pause" : "Resume"} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", marginRight: 8 }}>
+                            {sub.active ? <Pause size={13} /> : <Play size={13} />}
+                          </button>
+                          <button onClick={() => deleteSubscription(sub)} title="Delete" style={{ background: "none", border: "none", cursor: "pointer", color: "#dc2626" }}>
+                            <Trash2 size={13} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        )}
       </main>
+
+      {scheduleModalReport && (
+        <ScheduleModal
+          report={scheduleModalReport}
+          onClose={() => setScheduleModalReport(null)}
+          onCreated={loadSubscriptions}
+        />
+      )}
     </AppLayout>
   );
 }
