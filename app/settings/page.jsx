@@ -1,9 +1,10 @@
 "use client";
 import AppLayout from "@/components/AppLayout";
 import Header from "@/components/Header";
-import { Users, Shield, Building2, Bell, CheckCircle, DollarSign, Grid3X3 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Users, Shield, Building2, Bell, CheckCircle, DollarSign, Grid3X3, UserPlus, Trash2, Power } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import AddUserModal from "@/components/AddUserModal";
 
 const roles = [
   { role:"Corporate Admin",  users:2, access:"Full access all properties" },
@@ -57,17 +58,59 @@ export default function SettingsPage() {
   const { user: currentUser, loading: userLoading } = useCurrentUser();
   const [teamUsers, setTeamUsers] = useState([]);
   const [usersError, setUsersError] = useState("");
+  const [usersLoading, setUsersLoading] = useState(true);
+  const [addUserOpen, setAddUserOpen] = useState(false);
+  const [actionError, setActionError] = useState("");
 
-  useEffect(() => {
+  const loadUsers = useCallback(() => {
     if (currentUser?.role !== "Admin") return;
+    setUsersLoading(true);
     fetch("/api/auth/users")
       .then((r) => r.json())
       .then((data) => {
         if (data.error) setUsersError(data.error);
         else setTeamUsers(data.users || []);
       })
-      .catch(() => setUsersError("Failed to load team access."));
+      .catch(() => setUsersError("Failed to load team access."))
+      .finally(() => setUsersLoading(false));
   }, [currentUser]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount/on-change
+    loadUsers();
+  }, [loadUsers]);
+
+  async function handleRoleChange(user, newRole) {
+    setActionError("");
+    const res = await fetch(`/api/auth/users/${user.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: newRole }),
+    });
+    const json = await res.json();
+    if (!res.ok) setActionError(json.error);
+    loadUsers();
+  }
+
+  async function handleToggleActive(user) {
+    setActionError("");
+    const res = await fetch(`/api/auth/users/${user.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ active: !user.active }),
+    });
+    const json = await res.json();
+    if (!res.ok) setActionError(json.error);
+    loadUsers();
+  }
+
+  async function handleDelete(user) {
+    setActionError("");
+    const res = await fetch(`/api/auth/users/${user.id}`, { method: "DELETE" });
+    const json = await res.json();
+    if (!res.ok) setActionError(json.error);
+    loadUsers();
+  }
 
   return (
     <AppLayout>
@@ -107,12 +150,20 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Team Access — real configured users, Admin-only */}
+          {/* Team Access — real self-service user management, Admin-only */}
           <div style={{ background:"white",borderRadius:8,border:"1px solid #e2e8f0",overflow:"hidden" }}>
             <div style={{ padding:"10px 14px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
               <div style={{ fontWeight:700,fontSize:13,color:"#0f172a",display:"flex",alignItems:"center",gap:6 }}><Users size={13}/> Team Access</div>
+              {currentUser?.role === "Admin" && (
+                <button onClick={() => setAddUserOpen(true)} style={{ display:"inline-flex",alignItems:"center",gap:5,background:"#2563eb",color:"white",border:"none",borderRadius:5,padding:"5px 10px",fontSize:11,fontWeight:700,cursor:"pointer" }}>
+                  <UserPlus size={12}/> Add User
+                </button>
+              )}
             </div>
-            {userLoading ? (
+            {actionError && (
+              <div style={{ padding:"8px 14px",fontSize:11,color:"#b91c1c",background:"#fef2f2",borderBottom:"1px solid #fecaca" }}>{actionError}</div>
+            )}
+            {userLoading || usersLoading ? (
               <div style={{ padding:"16px 14px",fontSize:12,color:"#94a3b8" }}>Loading...</div>
             ) : currentUser?.role !== "Admin" ? (
               <div style={{ padding:"16px 14px",fontSize:12,color:"#94a3b8" }}>Only Admins can view team access. Signed in as {currentUser?.name} ({currentUser?.role}).</div>
@@ -120,17 +171,33 @@ export default function SettingsPage() {
               <div style={{ padding:"16px 14px",fontSize:12,color:"#b91c1c" }}>{usersError}</div>
             ) : (
             <div className="table-scroll">
-              <table style={{ width:"100%",borderCollapse:"collapse",minWidth:300 }}>
+              <table style={{ width:"100%",borderCollapse:"collapse",minWidth:420 }}>
                 <thead><tr style={{ background:"#f8fafc" }}>
-                  {["Name","Username","Role"].map(h=><th key={h} style={{ padding:"7px 14px",textAlign:"left",fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase" }}>{h}</th>)}
+                  {["Name","Username","Role","Status",""].map(h=><th key={h} style={{ padding:"7px 14px",textAlign:"left",fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase" }}>{h}</th>)}
                 </tr></thead>
                 <tbody>
-                  {teamUsers.map((u,i)=>(
-                    <tr key={i} style={{ borderBottom:"1px solid #f8fafc" }}>
+                  {teamUsers.map((u)=>(
+                    <tr key={u.id} style={{ borderBottom:"1px solid #f8fafc", opacity: u.active ? 1 : 0.5 }}>
                       <td style={{ padding:"8px 14px",fontSize:13,fontWeight:600,color:"#0f172a" }}>{u.name}</td>
                       <td style={{ padding:"8px 14px",fontSize:12,color:"#475569" }}>{u.username}</td>
                       <td style={{ padding:"8px 14px",fontSize:11 }}>
-                        <span style={{ background: u.role === "Admin" ? "#dbeafe" : u.role === "Payroll Manager" ? "#fef9c3" : "#f1f5f9", color: u.role === "Admin" ? "#1d4ed8" : u.role === "Payroll Manager" ? "#a16207" : "#64748b", padding:"2px 7px", borderRadius:4, fontWeight:600 }}>{u.role}</span>
+                        <select value={u.role} onChange={(e) => handleRoleChange(u, e.target.value)}
+                          style={{ background: u.role === "Admin" ? "#dbeafe" : u.role === "Payroll Manager" ? "#fef9c3" : "#f1f5f9", color: u.role === "Admin" ? "#1d4ed8" : u.role === "Payroll Manager" ? "#a16207" : "#64748b", padding:"2px 6px", borderRadius:4, fontWeight:600, border:"none", fontSize:11 }}>
+                          <option value="Admin">Admin</option>
+                          <option value="Payroll Manager">Payroll Manager</option>
+                          <option value="Viewer">Viewer</option>
+                        </select>
+                      </td>
+                      <td style={{ padding:"8px 14px",fontSize:11 }}>
+                        <span style={{ background: u.active ? "#dcfce7" : "#f1f5f9", color: u.active ? "#16a34a" : "#94a3b8", padding:"2px 7px", borderRadius:999, fontWeight:600 }}>{u.active ? "Active" : "Inactive"}</span>
+                      </td>
+                      <td style={{ padding:"8px 14px", whiteSpace:"nowrap" }}>
+                        <button onClick={() => handleToggleActive(u)} title={u.active ? "Deactivate" : "Activate"} style={{ background:"none", border:"none", cursor:"pointer", color:"#64748b", marginRight:8 }}>
+                          <Power size={13} />
+                        </button>
+                        <button onClick={() => handleDelete(u)} title="Delete" style={{ background:"none", border:"none", cursor:"pointer", color:"#dc2626" }}>
+                          <Trash2 size={13} />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -138,9 +205,6 @@ export default function SettingsPage() {
               </table>
             </div>
             )}
-            <div style={{ padding:"8px 14px", borderTop:"1px solid #f1f5f9", fontSize:10, color:"#94a3b8" }}>
-              Managed via the USERS_JSON environment variable — adding or removing accounts requires updating that variable and redeploying.
-            </div>
           </div>
 
           {/* Approval Rules (Payroll & Employee) */}
@@ -191,6 +255,10 @@ export default function SettingsPage() {
           </div>
         </div>
       </main>
+
+      {addUserOpen && (
+        <AddUserModal onClose={() => setAddUserOpen(false)} onCreated={loadUsers} />
+      )}
     </AppLayout>
   );
 }
