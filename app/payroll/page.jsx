@@ -196,6 +196,9 @@ export default function PayrollPage() {
               style={{ padding: "5px 8px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, outline: "none" }}>
               {["Approved", "Pending", "All"].map(a => <option key={a}>{a}</option>)}
             </select>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {exportStatus === "exporting" && <span style={{ fontSize: 10, color: "#94a3b8" }}>Exporting...</span>}
+              {exportStatus === "exported" && <span style={{ fontSize: 10, color: "#16a34a" }}>Exported ✓</span>}
             <div style={{ position: "relative" }}>
               <button onClick={() => setExportOpen(o => !o)} style={{ display: "flex", alignItems: "center", gap: 5, background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                 <Download size={12} /> Export
@@ -210,6 +213,7 @@ export default function PayrollPage() {
                   ))}
                 </div>
               )}
+            </div>
             </div>
           </div>
           <div className="table-scroll">

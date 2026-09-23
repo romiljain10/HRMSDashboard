@@ -252,28 +252,28 @@ export default function RevenuePage() {
           <form onSubmit={handleTipSubmit} style={{ marginBottom: tipState.status !== "idle" ? 12 : 0 }}>
             {tipRows.map((row, i) => (
               <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: 8, flexWrap: "wrap" }}>
-                <div>
+                <div style={{ flex: "1 1 180px", minWidth: 140 }}>
                   {i === 0 && <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Property</label>}
                   <select value={row.property} onChange={(e) => updateTipRow(i, "property", e.target.value)}
-                    style={{ padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, width: 220 }}>
+                    style={{ padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, width: "100%" }}>
                     <option value="">Select a property...</option>
                     {realLocations.map((loc) => <option key={loc} value={loc}>{loc}</option>)}
                   </select>
                 </div>
-                <div>
+                <div style={{ flex: "1 1 110px", minWidth: 90 }}>
                   {i === 0 && <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Tip Amount ($)</label>}
                   <input type="number" min="0" step="0.01" value={row.amount} onChange={(e) => updateTipRow(i, "amount", e.target.value)} placeholder="0.00"
-                    style={{ padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, width: 140 }} />
+                    style={{ padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, width: "100%" }} />
                 </div>
-                <div>
+                <div style={{ flex: "1 1 130px", minWidth: 120 }}>
                   {i === 0 && <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>From</label>}
                   <input type="date" value={row.weekStart} max={row.weekEnd} onChange={(e) => updateTipRow(i, "weekStart", e.target.value)}
-                    style={{ padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, width: 150 }} />
+                    style={{ padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, width: "100%" }} />
                 </div>
-                <div>
+                <div style={{ flex: "1 1 130px", minWidth: 120 }}>
                   {i === 0 && <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>To</label>}
                   <input type="date" value={row.weekEnd} min={row.weekStart} onChange={(e) => updateTipRow(i, "weekEnd", e.target.value)}
-                    style={{ padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, width: 150 }} />
+                    style={{ padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, width: "100%" }} />
                 </div>
                 {tipRows.length > 1 && (
                   <button type="button" onClick={() => removeTipRow(i)} title="Remove row" style={{ padding: 8, border: "1px solid #e2e8f0", borderRadius: 6, background: "white", color: "#94a3b8", cursor: "pointer" }}>
