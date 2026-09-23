@@ -18,6 +18,7 @@ import {
 import { DollarSign, Users, Grid3X3, AlertTriangle, CheckCircle, Clock, ChevronRight, TrendingUp, Percent, BedDouble } from "lucide-react";
 import Link from "next/link";
 import { useRevenueSnapshot } from "@/hooks/useRevenueSnapshot";
+import { useRevenueTrend } from "@/hooks/useRevenueTrend";
 import { useWeeklyTips } from "@/hooks/useWeeklyTips";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 
@@ -31,6 +32,7 @@ export default function Dashboard() {
   const GRAND_TOTAL = data?.grandTotal || 0;
   const CURRENT_PERIOD_TOTALS = data?.currentPeriodTotals ?? { regularHours: 0, otHours: 0, holidayHours: 0, totalHours: 0, totalCost: 0 };
   const { snapshot: revenue, loading: revenueLoading, error: revenueError } = useRevenueSnapshot();
+  const { points: revenueTrendPoints, loading: trendLoading, error: trendError } = useRevenueTrend(26);
   const { total: tipsTotal, enteredForCurrentSelection: tipsEntered, loading: tipsLoading } = useWeeklyTips();
   const { user: currentUser } = useCurrentUser();
   const currentRole = currentUser?.role;
@@ -170,6 +172,35 @@ export default function Dashboard() {
             </div>
           ))}
         </div>
+        )}
+
+        {/* Historical Revenue Trend */}
+        {!revenueLoading && revenue && (
+          <div style={{ background: "white", borderRadius: 8, border: "1px solid #e2e8f0", padding: 14, marginBottom: 14 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: "#0f172a", marginBottom: 2 }}>Revenue Trend</div>
+            <div style={{ fontSize: 10, color: "#64748b", marginBottom: 10 }}>Every uploaded period for {location} — updates as new revenue data is added</div>
+            {trendLoading ? (
+              <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#94a3b8" }}>Loading...</div>
+            ) : trendError ? (
+              <div style={{ fontSize: 11, color: "#b91c1c", padding: "20px 0" }}>{trendError}</div>
+            ) : revenueTrendPoints.length < 2 ? (
+              <div style={{ padding: "20px 0", fontSize: 12, color: "#94a3b8" }}>Need at least 2 uploaded periods to show a trend — currently {revenueTrendPoints.length}.</div>
+            ) : (
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={revenueTrendPoints}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="periodStart" tick={{ fontSize: 9 }} />
+                <YAxis yAxisId="left" tick={{ fontSize: 9 }} tickFormatter={v => "$" + (v / 1000).toFixed(0) + "k"} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9 }} tickFormatter={v => v + "%"} />
+                <Tooltip />
+                <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
+                <Line yAxisId="left" type="monotone" dataKey="totalRevenue" stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} name="Total Revenue ($)" />
+                <Line yAxisId="right" type="monotone" dataKey="occupancyPct" stroke="#7c3aed" strokeWidth={1.5} dot={{ r: 3 }} name="Occupancy (%)" />
+                <Line yAxisId="right" type="monotone" dataKey="revpar" stroke="#059669" strokeWidth={1.5} dot={{ r: 3 }} name="RevPAR ($)" />
+              </LineChart>
+            </ResponsiveContainer>
+            )}
+          </div>
         )}
 
         {/* Charts Row */}

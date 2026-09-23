@@ -1,7 +1,7 @@
 "use client";
 import AppLayout from "@/components/AppLayout";
 import Header from "@/components/Header";
-import { Download, FileText, Calendar, BarChart2, Users, DollarSign, Clock, Grid3X3, CalendarClock, ArrowRight, Trash2, Pause, Play, Send } from "lucide-react";
+import { Download, FileText, Calendar, BarChart2, Users, DollarSign, Clock, Grid3X3, CalendarClock, ArrowRight, Trash2, Pause, Play, Send, Mail } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
 import { useFilteredPayrollDataset } from "@/hooks/useFilteredPayrollDataset";
@@ -48,6 +48,13 @@ const reports = [
       { key: "missing-hours",              name: "Missing Hours Report",        desc: "Employees with zero hours logged during the current payroll period",                   icon: Clock,      color: "#dc2626", formats: ["XLSX","CSV","PDF"] },
     ],
   },
+  {
+    category: "Reminders",
+    items: [
+      { key: "revenue-reminder", name: "Revenue Entry Reminder", desc: "Emails a nudge listing any property missing revenue data for the period — sends nothing if everything's already entered", icon: Mail, color: "#2563eb", formats: [] },
+      { key: "tips-reminder",    name: "Tips Entry Reminder",    desc: "Emails a nudge listing any property missing tips for the period — sends nothing if everything's already entered",          icon: Mail, color: "#7c3aed", formats: [] },
+    ],
+  },
 ];
 
 export default function ReportsPage() {
@@ -57,6 +64,7 @@ export default function ReportsPage() {
   const canExport = !currentUser || currentUser.role !== "Viewer";
   const today = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   const [emptyNotice, setEmptyNotice] = useState(null);
+  const [exportingButton, setExportingButton] = useState(null);
   const [scheduleModalReport, setScheduleModalReport] = useState(null);
   const [subscriptions, setSubscriptions] = useState([]);
   const [subsLoading, setSubsLoading] = useState(true);
@@ -116,15 +124,26 @@ export default function ReportsPage() {
   function handleExport(report, format) {
     const isHistorical = HISTORICAL_KEYS.includes(report.key);
     if (loading || !data || (isHistorical && trendLoading)) return;
-    const { columns, rows } = buildReportRows(report.key, data, isHistorical ? weeklyTotals : undefined);
-    if (rows.length === 0) {
-      setEmptyNotice(report.key);
-      setTimeout(() => setEmptyNotice((k) => (k === report.key ? null : k)), 4000);
-      return;
-    }
-    if (format === "CSV") exportCSV(report.name, columns, rows);
-    else if (format === "XLSX") exportXLSX(report.name, columns, rows);
-    else if (format === "PDF") exportPDF(report.name, columns, rows, `${location} | ${formatDateRangeLabel(start, end)}`);
+    const buttonKey = `${report.key}:${format}`;
+    setExportingButton(buttonKey);
+    // Generation is fast client-side, but a brief minimum delay gives real
+    // visual feedback that the click registered, rather than an instant
+    // flash that's easy to miss.
+    setTimeout(() => {
+      try {
+        const { columns, rows } = buildReportRows(report.key, data, isHistorical ? weeklyTotals : undefined);
+        if (rows.length === 0) {
+          setEmptyNotice(report.key);
+          setTimeout(() => setEmptyNotice((k) => (k === report.key ? null : k)), 4000);
+          return;
+        }
+        if (format === "CSV") exportCSV(report.name, columns, rows);
+        else if (format === "XLSX") exportXLSX(report.name, columns, rows);
+        else if (format === "PDF") exportPDF(report.name, columns, rows, `${location} | ${formatDateRangeLabel(start, end)}`);
+      } finally {
+        setExportingButton(null);
+      }
+    }, 350);
   }
 
   return (
@@ -153,10 +172,12 @@ export default function ReportsPage() {
                     <div style={{ fontSize: 11, color: "#64748b", marginBottom: 10, lineHeight: 1.5 }}>{report.desc}</div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                       {canExport ? report.formats.map(fmt => {
-                        const isDisabled = loading || (HISTORICAL_KEYS.includes(report.key) && trendLoading);
+                        const buttonKey = `${report.key}:${fmt}`;
+                        const isExporting = exportingButton === buttonKey;
+                        const isDisabled = loading || (HISTORICAL_KEYS.includes(report.key) && trendLoading) || isExporting;
                         return (
-                        <button key={fmt} onClick={() => handleExport(report, fmt)} disabled={isDisabled} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 9px", border: "1px solid #e2e8f0", borderRadius: 5, background: isDisabled ? "#f8fafc" : "white", color: isDisabled ? "#cbd5e1" : "#475569", fontSize: 11, fontWeight: 600, cursor: isDisabled ? "default" : "pointer" }}>
-                          <Download size={11} /> {fmt}
+                        <button key={fmt} onClick={() => handleExport(report, fmt)} disabled={isDisabled} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 9px", border: "1px solid #e2e8f0", borderRadius: 5, background: isDisabled ? "#f8fafc" : "white", color: isDisabled ? "#cbd5e1" : "#475569", fontSize: 11, fontWeight: 600, cursor: isDisabled ? "default" : "pointer", minWidth: 52 }}>
+                          <Download size={11} /> {isExporting ? "..." : fmt}
                         </button>
                         );
                       }) : (

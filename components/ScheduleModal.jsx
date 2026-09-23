@@ -30,7 +30,7 @@ export default function ScheduleModal({ report, onClose, onCreated }) {
           frequency,
           dayOfWeek: frequency === "weekly" ? Number(dayOfWeek) : undefined,
           dayOfMonth: frequency === "monthly" ? Number(dayOfMonth) : undefined,
-          format,
+          format: report.isReminder ? undefined : format,
         }),
       });
       const json = await res.json();
@@ -71,6 +71,7 @@ export default function ScheduleModal({ report, onClose, onCreated }) {
                 <option value="monthly">Monthly</option>
               </select>
             </div>
+            {!report.isReminder && (
             <div style={{ flex: 1 }}>
               <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Format</label>
               <select value={format} onChange={(e) => setFormat(e.target.value)} style={{ width: "100%", padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12 }}>
@@ -78,6 +79,7 @@ export default function ScheduleModal({ report, onClose, onCreated }) {
                 <option value="CSV">CSV</option>
               </select>
             </div>
+            )}
           </div>
 
           {frequency === "weekly" ? (

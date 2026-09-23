@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Users, DollarSign, Grid3X3,
-  FileText, Settings, ChevronLeft, ChevronRight, Building2, Menu, X, Network, TrendingUp
+  FileText, Settings, ChevronLeft, ChevronRight, Building2, Menu, X, Network, TrendingUp, History
 } from "lucide-react";
 import { useState } from "react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -15,6 +15,7 @@ const navItems = [
   { href: "/payroll",     label: "Payroll",    icon: DollarSign },
   { href: "/revenue",     label: "Revenue",    icon: TrendingUp, roles: ["Admin", "Payroll Manager"] },
   { href: "/reports",     label: "Reports",    icon: FileText },
+  { href: "/audit-log",   label: "Audit Log",  icon: History, roles: ["Admin"] },
   { href: "/settings",    label: "Settings",   icon: Settings },
 ];
 

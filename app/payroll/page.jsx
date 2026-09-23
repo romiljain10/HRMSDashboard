@@ -63,10 +63,17 @@ export default function PayrollPage() {
   const totalHoliday = filtered.reduce((s, e) => s + e.holidayHours, 0);
   const pending      = allEmployees.filter(e => e.approvalStatus === "Pending").length;
 
+  const [exportStatus, setExportStatus] = useState(null);
+
   function handleExport(reportKey, format) {
-    const { columns, rows } = buildReportRows(reportKey, { ...data, employees: filtered, departmentTotals, burdenByDepartment });
-    if (format === "CSV") exportCSV(reportKey, columns, rows);
-    else exportXLSX(reportKey, columns, rows);
+    setExportStatus("exporting");
+    setTimeout(() => {
+      const { columns, rows } = buildReportRows(reportKey, { ...data, employees: filtered, departmentTotals, burdenByDepartment });
+      if (format === "CSV") exportCSV(reportKey, columns, rows);
+      else exportXLSX(reportKey, columns, rows);
+      setExportStatus("exported");
+      setTimeout(() => setExportStatus(null), 2000);
+    }, 300);
   }
 
   return (
@@ -116,6 +123,9 @@ export default function PayrollPage() {
         <div style={{ background: "white", borderRadius: 8, border: "1px solid #e2e8f0", marginBottom: 14, overflow: "hidden" }}>
           <div style={{ padding: "10px 14px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <span style={{ fontWeight: 700, fontSize: 13, color: "#0f172a" }}>Department Rollups</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {exportStatus === "exporting" && <span style={{ fontSize: 10, color: "#94a3b8" }}>Exporting...</span>}
+              {exportStatus === "exported" && <span style={{ fontSize: 10, color: "#16a34a" }}>Exported ✓</span>}
             <div style={{ position: "relative" }}>
               <button onClick={() => setDeptExportOpen(o => !o)} style={{ display: "flex", alignItems: "center", gap: 5, background: "white", color: "#2563eb", border: "1px solid #dbeafe", borderRadius: 6, padding: "4px 9px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
                 <Download size={11} /> Export
@@ -130,6 +140,7 @@ export default function PayrollPage() {
                   ))}
                 </div>
               )}
+            </div>
             </div>
           </div>
           <div className="table-scroll">

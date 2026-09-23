@@ -251,7 +251,7 @@ export default function RevenuePage() {
 
           <form onSubmit={handleTipSubmit} style={{ marginBottom: tipState.status !== "idle" ? 12 : 0 }}>
             {tipRows.map((row, i) => (
-              <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: 8 }}>
+              <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: 8, flexWrap: "wrap" }}>
                 <div>
                   {i === 0 && <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Property</label>}
                   <select value={row.property} onChange={(e) => updateTipRow(i, "property", e.target.value)}

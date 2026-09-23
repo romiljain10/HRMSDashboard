@@ -26,6 +26,7 @@ export async function POST(request) {
   if (!reportKey || !REPORTS_CATALOG.some((r) => r.key === reportKey)) {
     return NextResponse.json({ error: "Unknown reportKey." }, { status: 400 });
   }
+  const reportDef = REPORTS_CATALOG.find((r) => r.key === reportKey);
   if (!Array.isArray(recipients) || recipients.length === 0) {
     return NextResponse.json({ error: "At least one recipient email is required." }, { status: 400 });
   }
@@ -43,7 +44,8 @@ export async function POST(request) {
   if (frequency === "monthly" && (dayOfMonth == null || dayOfMonth < 1 || dayOfMonth > 28)) {
     return NextResponse.json({ error: "dayOfMonth (1-28, to stay valid every month) is required for monthly schedules." }, { status: 400 });
   }
-  if (!["CSV", "XLSX"].includes(format)) {
+  // Reminders don't attach a file, so no format to validate.
+  if (!reportDef.isReminder && !["CSV", "XLSX"].includes(format)) {
     return NextResponse.json({ error: 'format must be "CSV" or "XLSX" — scheduled emails don\'t support PDF (no headless browser available server-side).' }, { status: 400 });
   }
 
