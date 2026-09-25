@@ -6,6 +6,7 @@ import {
   departmentGroupFor,
   computeLaborCost,
   round2,
+  HOLIDAY_MULTIPLIER,
 } from "@/lib/payroll/config";
 import {
   buildDepartmentTotals,
@@ -31,6 +32,7 @@ const REPORT_FIELDS = [
   "payRate",
   "payRateCurrency",
   "payType",
+  "employmentHistoryStatus", // e.g. "Full-Time"/"Part-Time" — used for HOURS_BY_STATUS holiday pay
 ];
 
 const STANDARD_ANNUAL_HOURS = 2080; // 40 hrs/week * 52 weeks — used to convert salaried pay to an hourly equivalent
@@ -84,6 +86,7 @@ async function fetchDirectoryWithCompensation() {
     status: row.status === "Active" ? "Active" : row.status || "Inactive",
     hireDate: row.hireDate || null,
     payType: row.payType || "Hourly",
+    employmentStatus: row.employmentHistoryStatus || "Full-Time",
     // payRate comes back as e.g. "18.00" (hourly) or "85,000.00" (annual,
     // when payType is Salary/Yearly) — normalize both to an hourly rate so
     // downstream labor-cost math is consistent regardless of pay type.
@@ -149,41 +152,83 @@ const WEEKLY_OT_THRESHOLD = 40; // FLSA standard; per-week, not per-pay-period
 
 /**
  * Fetches company holidays overlapping the given range from BambooHR's
- * holiday calendar (added Aug 2026 — GET /v1/holidays). Returns a Set of
- * ISO date strings ("2026-07-04") for every day covered by a holiday, so
- * timesheet entries can be checked against it with a simple lookup.
- * Falls back to an empty set on any failure — holiday detection degrades
- * gracefully rather than breaking the whole hours calculation.
+ * holiday calendar (GET /v1/holidays), with full detail: which employees
+ * each holiday applies to (`audience`), and how it's paid (`holidayPay`):
+ *   - mode "MULTIPLIER": only hours actually worked on the holiday date
+ *     count as holiday hours, paid at holidayPay.multiplier (e.g. 1.5).
+ *   - mode "HOURS_BY_STATUS": every eligible employee gets a fixed number
+ *     of paid holiday hours (by employment status) regardless of whether
+ *     they worked — this is a separate benefit, not tied to timesheet
+ *     entries at all, and is paid at the regular rate (no multiplier).
+ * Returns { holidays: [], live: boolean } — live:false on any failure
+ * (including a permissions gap, same pattern as the Compensation check)
+ * so callers can degrade gracefully and the UI can say why.
  */
-async function fetchHolidayDates(start, end) {
+async function fetchHolidays(start, end) {
   const isoStart = start.toISOString().slice(0, 10);
   const isoEnd = end.toISOString().slice(0, 10);
 
   try {
     const data = await bambooGet("/holidays", {
-      filter: `startDate le '${isoEnd}' and endDate ge '${isoStart}'`,
+      filter: `startDate le '${isoEnd}' and startDate ge '${isoStart}'`,
       limit: 100,
     });
 
-    const holidays = Array.isArray(data) ? data : data?.data ?? data?.items ?? [];
-    const dates = new Set();
-
-    for (const h of holidays) {
-      if (!h.startDate) continue;
-      const d = new Date(h.startDate + "T00:00:00");
-      const last = new Date((h.endDate || h.startDate) + "T00:00:00");
-      while (d <= last) {
-        dates.add(d.toISOString().slice(0, 10));
-        d.setDate(d.getDate() + 1);
+    const raw = Array.isArray(data) ? data : data?.data ?? data?.items ?? [];
+    const holidays = raw.map((h) => {
+      const dates = new Set();
+      if (h.startDate) {
+        const d = new Date(h.startDate + "T00:00:00");
+        const last = new Date((h.endDate || h.startDate) + "T00:00:00");
+        while (d <= last) {
+          dates.add(d.toISOString().slice(0, 10));
+          d.setDate(d.getDate() + 1);
+        }
       }
-    }
+      return {
+        id: h.id,
+        name: h.name,
+        dates,
+        audience: h.audience || { mode: "ALL_EMPLOYEES" },
+        holidayPay: h.holidayPay || { mode: "MULTIPLIER", multiplier: String(HOLIDAY_MULTIPLIER) },
+      };
+    });
 
-    return dates;
+    return { holidays, live: true };
   } catch {
-    // Holiday endpoint unavailable/not permitted for this API key — treat
-    // as "no holidays" rather than failing the whole hours calculation.
-    return new Set();
+    // Holiday endpoint unavailable/not permitted for this API key (the
+    // `holidays` scope may not be granted) — degrade gracefully rather
+    // than failing the whole hours calculation.
+    return { holidays: [], live: false };
   }
+}
+
+function isEmployeeEligibleForHoliday(employeeId, holiday) {
+  const a = holiday.audience;
+  const id = String(employeeId);
+  const exempt = (a.exemptEmployeeIds || []).map(String);
+  if (exempt.includes(id)) return false;
+
+  if (a.mode === "SPECIFIC_EMPLOYEES") {
+    return (a.specificEmployeeIds || []).map(String).includes(id);
+  }
+  if (a.mode === "FILTERED") {
+    const included = [...(a.specificEmployeeIds || []), ...(a.additionalEmployeeIds || [])].map(String);
+    return included.includes(id);
+  }
+  // ALL_EMPLOYEES (or an unrecognized mode — default to inclusive rather
+  // than silently dropping everyone's holiday pay).
+  return true;
+}
+
+/** Fixed holiday hours for a HOURS_BY_STATUS holiday, by employment status. */
+function fixedHolidayHoursFor(holiday, employmentStatus) {
+  const pay = holiday.holidayPay;
+  const byStatus = pay.hoursByEmploymentStatus;
+  if (byStatus && employmentStatus && byStatus[employmentStatus] != null) {
+    return Number(byStatus[employmentStatus]) || 0;
+  }
+  return Number(pay.defaultHours) || 0;
 }
 
 /**
@@ -191,36 +236,63 @@ async function fetchHolidayDates(start, end) {
  * - regular/OT hours, computed the same way BambooHR's own Payroll Hours
  *   report does — total hours worked bucketed by calendar week (Mon–Sun),
  *   with hours over 40/week counted as overtime.
- * - holiday hours, cross-referenced against BambooHR's company holiday
- *   calendar (GET /v1/holidays) — hours worked on a holiday date are
- *   pulled out separately and don't count toward the 40hr/week threshold.
- * - real approval status, from each entry's actual `approved` field
- *   (BambooHR tracks this natively — see the Payroll Hours report).
+ * - holiday hours, using BambooHR's real holiday configuration:
+ *     MULTIPLIER holidays: hours actually worked on that date (for
+ *       eligible employees) are pulled out of the weekly regular/OT
+ *       bucket and paid at the holiday's own configured multiplier.
+ *     HOURS_BY_STATUS holidays: every eligible employee gets a fixed
+ *       number of hours (by employment status) regardless of whether
+ *       they worked — an independent paid benefit, not derived from
+ *       timesheet entries, paid at the regular (1x) rate.
+ * - real approval status, from each entry's actual `approved` field.
+ *
+ * `employees` must be the full employee objects (needs id and
+ * employmentStatus, the latter only used for HOURS_BY_STATUS holidays).
  */
-async function fetchWeeklyHours(employeeIds, start, end) {
+async function fetchWeeklyHours(employees, start, end) {
   const isoStart = start.toISOString().slice(0, 10);
   const isoEnd = end.toISOString().slice(0, 10);
 
   try {
-    const [data, holidayDates] = await Promise.all([
+    const [data, { holidays, live: holidaysLive }] = await Promise.all([
       bambooGet("/time_tracking/timesheet_entries", {
-        employeeIds: employeeIds.join(","),
+        employeeIds: employees.map((e) => e.id).join(","),
         start: isoStart,
         end: isoEnd,
       }),
-      fetchHolidayDates(start, end),
+      fetchHolidays(start, end),
     ]);
 
     const entries = normalizeTimesheetEntries(data);
 
-    // employeeId -> weekKey -> total hours (holiday-dated hours excluded —
-    // those are tracked separately and paid at the holiday rate regardless
-    // of the 40hr/week threshold, not folded into regular/OT).
+    // date -> the MULTIPLIER-mode holiday covering it, if any (used to
+    // divert worked hours out of the weekly regular/OT bucket). A date
+    // covered by a HOURS_BY_STATUS holiday is deliberately NOT in this
+    // map — worked hours on such a day stay in the normal weekly bucket,
+    // since that holiday's pay is a separate fixed benefit, not a
+    // worked-hours premium.
+    const multiplierHolidayByDate = new Map();
+    for (const h of holidays) {
+      if (h.holidayPay.mode !== "MULTIPLIER") continue;
+      for (const d of h.dates) multiplierHolidayByDate.set(d, h);
+    }
+
+    // employeeId -> weekKey -> total hours (non-holiday-worked hours only)
     const weeklyTotals = new Map();
-    // employeeId -> total holiday hours
-    const holidayTotals = new Map();
-    // employeeId -> { anyApproved, allApproved, count }
+    // employeeId -> total holiday hours (for display — sum of both modes)
+    const holidayHoursTotals = new Map();
+    // employeeId -> total "1x-equivalent" holiday cost weight (hours already
+    // scaled by their applicable multiplier — 1.5 for MULTIPLIER-mode worked
+    // hours, 1.0 for HOURS_BY_STATUS fixed hours) — multiplied by the
+    // employee's own rate later, once it's known, to get real dollar cost.
+    const holidayCostWeight = new Map();
+    // employeeId -> { count, approvedCount }
     const approval = new Map();
+
+    const addHolidayHours = (empId, hours, weight) => {
+      holidayHoursTotals.set(empId, (holidayHoursTotals.get(empId) || 0) + hours);
+      holidayCostWeight.set(empId, (holidayCostWeight.get(empId) || 0) + weight);
+    };
 
     for (const entry of entries) {
       const empId = String(entry.employeeId);
@@ -228,8 +300,12 @@ async function fetchWeeklyHours(employeeIds, start, end) {
       const dateStr = entry.date || entry.start?.slice(0, 10);
       if (!dateStr) continue;
 
-      if (holidayDates.has(dateStr)) {
-        holidayTotals.set(empId, (holidayTotals.get(empId) || 0) + hrs);
+      const holiday = multiplierHolidayByDate.get(dateStr);
+      const eligible = holiday && isEmployeeEligibleForHoliday(empId, holiday);
+
+      if (eligible) {
+        const multiplier = Number(holiday.holidayPay.multiplier) || HOLIDAY_MULTIPLIER;
+        addHolidayHours(empId, hrs, hrs * multiplier);
       } else {
         const weekKey = isoWeekKey(dateStr);
         if (!weeklyTotals.has(empId)) weeklyTotals.set(empId, new Map());
@@ -244,8 +320,19 @@ async function fetchWeeklyHours(employeeIds, start, end) {
       approval.set(empId, a);
     }
 
+    // HOURS_BY_STATUS holidays: add each eligible employee's fixed
+    // allotment directly, independent of any timesheet entries.
+    for (const h of holidays) {
+      if (h.holidayPay.mode !== "HOURS_BY_STATUS") continue;
+      for (const emp of employees) {
+        if (!isEmployeeEligibleForHoliday(emp.id, h)) continue;
+        const fixedHours = fixedHolidayHoursFor(h, emp.employmentStatus);
+        if (fixedHours > 0) addHolidayHours(String(emp.id), fixedHours, fixedHours * 1); // paid at regular (1x) rate
+      }
+    }
+
     const hoursByEmployee = new Map();
-    const allEmployeeIds = new Set([...weeklyTotals.keys(), ...holidayTotals.keys()]);
+    const allEmployeeIds = new Set([...weeklyTotals.keys(), ...holidayHoursTotals.keys()]);
     for (const empId of allEmployeeIds) {
       const weeks = weeklyTotals.get(empId) || new Map();
       let regularHours = 0;
@@ -255,9 +342,10 @@ async function fetchWeeklyHours(employeeIds, start, end) {
         otHours += Math.max(0, weekTotal - WEEKLY_OT_THRESHOLD);
       }
       hoursByEmployee.set(empId, {
-        regularHours: Math.round(regularHours * 100) / 100,
-        otHours: Math.round(otHours * 100) / 100,
-        holidayHours: Math.round((holidayTotals.get(empId) || 0) * 100) / 100,
+        regularHours: round2(regularHours),
+        otHours: round2(otHours),
+        holidayHours: round2(holidayHoursTotals.get(empId) || 0),
+        holidayCostWeight: round2(holidayCostWeight.get(empId) || 0),
       });
     }
 
@@ -266,11 +354,11 @@ async function fetchWeeklyHours(employeeIds, start, end) {
       approvalByEmployee.set(empId, a.count > 0 && a.approvedCount === a.count ? "Approved" : "Pending");
     }
 
-    return { hoursByEmployee, approvalByEmployee, live: true };
+    return { hoursByEmployee, approvalByEmployee, live: true, holidaysLive };
   } catch (err) {
     // Time Tracking not enabled / not permitted / transient failure — degrade
     // gracefully rather than failing the whole payroll view.
-    return { hoursByEmployee: new Map(), approvalByEmployee: new Map(), live: false, error: err instanceof BambooHRError ? err.code : "UNKNOWN" };
+    return { hoursByEmployee: new Map(), approvalByEmployee: new Map(), live: false, holidaysLive: false, error: err instanceof BambooHRError ? err.code : "UNKNOWN" };
   }
 }
 
@@ -302,16 +390,13 @@ export async function getPayrollTrend({ end: endISO, weeks = 6 } = {}) {
   const weekResults = await Promise.all(
     weekRanges.map(({ weekStart, weekEnd }) =>
       cached(`trend-week:${weekStart.toISOString().slice(0, 10)}`, async () => {
-        const { hoursByEmployee } = await fetchWeeklyHours(
-          directory.map((e) => e.id),
-          weekStart,
-          weekEnd
-        );
+        const { hoursByEmployee } = await fetchWeeklyHours(directory, weekStart, weekEnd);
 
         const employeeCosts = directory.map((e) => {
-          const hours = hoursByEmployee.get(String(e.id)) || { regularHours: 0, otHours: 0, holidayHours: 0 };
+          const hours = hoursByEmployee.get(String(e.id)) || { regularHours: 0, otHours: 0, holidayHours: 0, holidayCostWeight: 0 };
           const burden = burdenRateFor(e.departmentGroup);
-          const cost = computeLaborCost({ baseRate: e.baseRate, burden, ...hours });
+          const holidayCostOverride = round2((hours.holidayCostWeight || 0) * e.baseRate * (1 + burden));
+          const cost = computeLaborCost({ baseRate: e.baseRate, burden, ...hours, holidayCostOverride });
           return {
             employeeId: e.id,
             location: e.location,
@@ -349,8 +434,8 @@ export async function getPayrollDataset({ start: startISO, end: endISO } = {}) {
   return cached(cacheKey, async () => {
     const { employees: directory, compensationAccessible } = await fetchDirectoryWithCompensation();
     const active = directory; // include all; UI filters by status itself
-    const { hoursByEmployee, approvalByEmployee, live: hoursLive } = await fetchWeeklyHours(
-      active.map((e) => e.id),
+    const { hoursByEmployee, approvalByEmployee, live: hoursLive, holidaysLive } = await fetchWeeklyHours(
+      active,
       start,
       end
     );
@@ -364,6 +449,7 @@ export async function getPayrollDataset({ start: startISO, end: endISO } = {}) {
         regularHours: 0,
         otHours: 0,
         holidayHours: 0,
+        holidayCostWeight: 0,
       };
       const pto = ptoBalances.get(String(e.id)) || {
         ptoAccrued: 0,
@@ -371,10 +457,17 @@ export async function getPayrollDataset({ start: startISO, end: endISO } = {}) {
         ptoBalance: 0,
       };
       const burden = burdenRateFor(e.departmentGroup);
+      // holidayCostWeight is "hours already scaled by their applicable
+      // multiplier" (1.5x for hours worked on a MULTIPLIER holiday, 1x for
+      // a HOURS_BY_STATUS fixed allotment) — multiply by this employee's
+      // own rate to get the real dollar cost, since different holidays in
+      // the same period can have different pay modes/multipliers.
+      const holidayCostOverride = round2((hours.holidayCostWeight || 0) * e.baseRate * (1 + burden));
       const cost = computeLaborCost({
         baseRate: e.baseRate,
         burden,
         ...hours,
+        holidayCostOverride,
       });
       // PTO used is paid at the employee's fully-loaded regular rate — not
       // a special PTO multiplier, since BambooHR doesn't expose one and
@@ -402,7 +495,7 @@ export async function getPayrollDataset({ start: startISO, end: endISO } = {}) {
       departmentGroups: buildDepartmentGroups(employees),
       grandTotal: round2(employees.reduce((sum, e) => sum + e.totalCost + e.ptoCost, 0)),
       currentPeriodTotals: buildCurrentPeriodTotals(employees),
-      meta: { hoursLive, ptoLive, compensationAccessible },
+      meta: { hoursLive, ptoLive, compensationAccessible, holidaysLive },
     };
   });
 }

@@ -83,6 +83,7 @@ export default function Dashboard() {
 
         <DataStateBanner loading={loading} error={error} onRetry={retry} degraded={!loading && !error && data?.meta?.hoursLive === false} />
         <DataStateBanner loading={false} error={null} degraded={!loading && !error && data?.meta?.compensationAccessible === false} degradedMessage="Pay rates are showing $0 for everyone — this usually means the BambooHR API key's user doesn't have 'Compensation' view permission. Ask an Admin to grant that access, or generate the key from an account that has it." />
+        <DataStateBanner loading={false} error={null} degraded={!loading && !error && data?.meta?.holidaysLive === false} degradedMessage="Holiday hours may be showing 0 for everyone — this usually means the BambooHR API key's user doesn't have access to the Holidays scope. Ask an Admin to check that access level." />
 
         {/* KPI Cards */}
         <div className="grid-kpi-4" style={{ marginBottom: 14 }}>
