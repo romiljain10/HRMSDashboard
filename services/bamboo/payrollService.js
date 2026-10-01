@@ -1,6 +1,7 @@
 import { bambooGet, bambooPost, BambooHRError } from "@/lib/bamboohr/client";
 import { cached } from "@/lib/bamboohr/cache";
 import { fetchAllPtoBalances } from "@/services/bamboo/timeOffService";
+import { getTipsCollection, getBonusesCollection } from "@/lib/db/collections";
 import {
   burdenRateFor,
   departmentGroupFor,
@@ -57,7 +58,7 @@ export function getCurrentPayPeriod() {
  * Pulls employee identity + pay rate from BambooHR via a custom report
  * (one request for the whole company, instead of N+1 per-employee calls).
  */
-async function fetchDirectoryWithCompensation() {
+export async function fetchDirectoryWithCompensation() {
   const data = await bambooPost(
     "/reports/custom",
     { title: "Payroll Sync", fields: REPORT_FIELDS },
@@ -425,6 +426,29 @@ export async function getPayrollTrend({ end: endISO, weeks = 6 } = {}) {
  * computed labor cost), department rollups, and grand total — same shape
  * the UI previously read from the static data/employees.js file.
  */
+/**
+ * Looks up Gratuity and Bonus totals per employee for a payroll period —
+ * matched by employeeId (resolved at upload time, see matchEmployee.js)
+ * and exact weekStart. Degrades to empty maps on any DB error rather
+ * than breaking payroll.
+ */
+async function fetchSupplementalPay(weekStartISO) {
+  try {
+    const [tipsCol, bonusCol] = await Promise.all([getTipsCollection(), getBonusesCollection()]);
+    const [tipsRows, bonusRows] = await Promise.all([
+      tipsCol.find({ weekStart: weekStartISO, employeeId: { $ne: null } }).toArray(),
+      bonusCol.find({ weekStart: weekStartISO, employeeId: { $ne: null } }).toArray(),
+    ]);
+    const tipsByEmployee = new Map();
+    for (const r of tipsRows) tipsByEmployee.set(String(r.employeeId), (tipsByEmployee.get(String(r.employeeId)) || 0) + (r.total || 0));
+    const bonusByEmployee = new Map();
+    for (const r of bonusRows) bonusByEmployee.set(String(r.employeeId), (bonusByEmployee.get(String(r.employeeId)) || 0) + (r.total || 0));
+    return { tipsByEmployee, bonusByEmployee, live: true };
+  } catch {
+    return { tipsByEmployee: new Map(), bonusByEmployee: new Map(), live: false };
+  }
+}
+
 export async function getPayrollDataset({ start: startISO, end: endISO } = {}) {
   const { start, end } = startISO && endISO
     ? { start: new Date(startISO + "T00:00:00"), end: new Date(endISO + "T23:59:59") }
@@ -443,6 +467,8 @@ export async function getPayrollDataset({ start: startISO, end: endISO } = {}) {
       active.map((e) => e.id),
       end.toISOString().slice(0, 10)
     );
+
+    const { tipsByEmployee, bonusByEmployee } = await fetchSupplementalPay(start.toISOString().slice(0, 10));
 
     const employees = active.map((e) => {
       const hours = hoursByEmployee.get(String(e.id)) || {
@@ -474,6 +500,15 @@ export async function getPayrollDataset({ start: startISO, end: endISO } = {}) {
       // straight-rate PTO pay is the standard default.
       const ptoCost = round2(pto.ptoUsed * cost.fullyLoadedRT);
 
+      // Gratuity/Bonus, matched per-employee from the Revenue page's
+      // uploads (see fetchSupplementalPay) — already burden-inclusive
+      // (each upload row carries its own Payroll Cost/Tax/Benefits %).
+      const tips = round2(tipsByEmployee.get(String(e.id)) || 0);
+      const bonus = round2(bonusByEmployee.get(String(e.id)) || 0);
+      // "Payroll Costs" (cost.totalCost, the hours-based labor cost) +
+      // Tips + Bonus = "Total Costs".
+      const grandTotalCost = round2(cost.totalCost + tips + bonus);
+
       return {
         ...e,
         ...hours,
@@ -481,6 +516,9 @@ export async function getPayrollDataset({ start: startISO, end: endISO } = {}) {
         burden,
         ...cost,
         ptoCost,
+        tips,
+        bonus,
+        grandTotalCost,
         // Real approval status from BambooHR's own timesheet approval
         // tracking (see fetchWeeklyHours) — falls back to "Pending" when
         // there's no timesheet data to derive it from for this employee.

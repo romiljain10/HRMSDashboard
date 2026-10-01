@@ -58,6 +58,9 @@ export default function PayrollPage() {
   });
 
   const totalPayroll = filtered.reduce((s, e) => s + e.totalCost + (e.ptoCost || 0), 0);
+  const totalTips = filtered.reduce((s, e) => s + (e.tips || 0), 0);
+  const totalBonus = filtered.reduce((s, e) => s + (e.bonus || 0), 0);
+  const totalGrandCost = filtered.reduce((s, e) => s + (e.grandTotalCost || e.totalCost || 0), 0);
   const totalHours   = filtered.reduce((s, e) => s + e.regularHours + e.otHours + e.holidayHours, 0);
   const totalOT      = filtered.reduce((s, e) => s + e.otHours, 0);
   const totalHoliday = filtered.reduce((s, e) => s + e.holidayHours, 0);
@@ -221,13 +224,13 @@ export default function PayrollPage() {
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
               <thead>
                 <tr style={{ background: "#f8fafc" }}>
-                  {["Employee","Title","Dept","Reg Hrs","OT Hrs","Holiday Hrs","Base Rate","Payroll Cost, Tax, Benefits, and Workers Comp","RT Rate","OT Rate","Total Cost","Approval"].map(h => (
-                    <th key={h} style={{ textAlign: ["Reg Hrs","OT Hrs","Holiday Hrs","Base Rate","Payroll Cost, Tax, Benefits, and Workers Comp","RT Rate","OT Rate","Total Cost"].includes(h) ? "right" : "left", padding: "7px 10px", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", whiteSpace: h === "Payroll Cost, Tax, Benefits, and Workers Comp" ? "normal" : "nowrap", maxWidth: h === "Payroll Cost, Tax, Benefits, and Workers Comp" ? 90 : undefined }}>{h}</th>
+                  {["Employee","Title","Dept","Reg Hrs","OT Hrs","Holiday Hrs","Base Rate","Payroll Cost, Tax, Benefits, and Workers Comp","RT Rate","OT Rate","Payroll Costs","Tips","Bonus","Total Costs","Approval"].map(h => (
+                    <th key={h} style={{ textAlign: ["Reg Hrs","OT Hrs","Holiday Hrs","Base Rate","Payroll Cost, Tax, Benefits, and Workers Comp","RT Rate","OT Rate","Payroll Costs","Tips","Bonus","Total Costs"].includes(h) ? "right" : "left", padding: "7px 10px", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", whiteSpace: h === "Payroll Cost, Tax, Benefits, and Workers Comp" ? "normal" : "nowrap", maxWidth: h === "Payroll Cost, Tax, Benefits, and Workers Comp" ? 90 : undefined }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {loading ? <SkeletonTableRows cols={12} rows={8} /> : filtered.map((e) => (
+                {loading ? <SkeletonTableRows cols={15} rows={8} /> : filtered.map((e) => (
                   <tr key={e.id} style={{ borderBottom: "1px solid #f8fafc", opacity: e.totalCost === 0 ? 0.6 : 1 }}>
                     <td style={{ padding: "8px 10px" }}>
                       <div style={{ fontWeight: 600, fontSize: 12, color: "#0f172a", whiteSpace: "nowrap" }}>{e.name}</div>
@@ -247,15 +250,29 @@ export default function PayrollPage() {
                     <td style={{ padding: "8px 10px", textAlign: "right", fontSize: 12, fontWeight: 700, color: e.totalCost > 0 ? "#0f172a" : "#94a3b8" }}>
                       {e.totalCost > 0 ? "$" + e.totalCost.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—"}
                     </td>
+                    <td style={{ padding: "8px 10px", textAlign: "right", fontSize: 12, color: e.tips > 0 ? "#059669" : "#94a3b8" }}>
+                      {e.tips > 0 ? "$" + e.tips.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—"}
+                    </td>
+                    <td style={{ padding: "8px 10px", textAlign: "right", fontSize: 12, color: e.bonus > 0 ? "#059669" : "#94a3b8" }}>
+                      {e.bonus > 0 ? "$" + e.bonus.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—"}
+                    </td>
+                    <td style={{ padding: "8px 10px", textAlign: "right", fontSize: 12, fontWeight: 700, color: "#1e40af" }}>
+                      ${(e.grandTotalCost ?? e.totalCost).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
                     <td style={{ padding: "8px 10px" }}><StatusBadge status={e.approvalStatus} /></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div style={{ padding: "8px 14px", background: "#f8fafc", borderTop: "1px solid #f1f5f9", fontSize: 11, color: "#64748b", display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 4 }}>
+          <div style={{ padding: "8px 14px", background: "#f8fafc", borderTop: "1px solid #f1f5f9", fontSize: 11, color: "#64748b", display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
             <span>{filtered.length} employees</span>
-            <span style={{ fontWeight: 700, color: "#0f172a" }}>Total: ${totalPayroll.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+              <span>Payroll Costs: <strong style={{ color: "#0f172a" }}>${totalPayroll.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
+              <span>Tips: <strong style={{ color: "#059669" }}>${totalTips.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
+              <span>Bonus: <strong style={{ color: "#059669" }}>${totalBonus.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
+              <span>Total Costs: <strong style={{ color: "#1e40af", fontSize: 12 }}>${totalGrandCost.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
+            </div>
           </div>
         </div>
 
