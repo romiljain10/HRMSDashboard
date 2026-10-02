@@ -63,6 +63,37 @@ export default function SettingsPage() {
   const [addUserOpen, setAddUserOpen] = useState(false);
   const [actionError, setActionError] = useState("");
 
+  const [profileName, setProfileName] = useState("");
+  const [profileState, setProfileState] = useState({ status: "idle" });
+
+  useEffect(() => {
+    if (currentUser?.name) setProfileName(currentUser.name);
+  }, [currentUser?.name]);
+
+  async function handleProfileSave(e) {
+    e.preventDefault();
+    setProfileState({ status: "saving" });
+    try {
+      const res = await fetch("/api/auth/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: profileName }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setProfileState({ status: "error", message: json.error });
+        return;
+      }
+      setProfileState({ status: "success" });
+      // Header/Sidebar run their own instance of useCurrentUser, so a full
+      // reload is the simplest reliable way to show the new name
+      // everywhere immediately — the session cookie's already updated.
+      setTimeout(() => window.location.reload(), 600);
+    } catch {
+      setProfileState({ status: "error", message: "Save failed — check your connection and try again." });
+    }
+  }
+
   const loadUsers = useCallback(() => {
     if (currentUser?.role !== "Admin") return;
     setUsersLoading(true);
@@ -148,6 +179,40 @@ export default function SettingsPage() {
                 </div>
               ))}
               <button style={{ marginTop:6,background:"#2563eb",color:"white",border:"none",borderRadius:5,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer" }}>Save Changes</button>
+            </div>
+          </div>
+
+          {/* My Profile — self-service, every role can edit their own name */}
+          <div style={{ background: "white", borderRadius: 8, border: "1px solid #e2e8f0", padding: 16 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: "#0f172a", marginBottom: 10 }}>My Profile</div>
+            {userLoading ? (
+              <div style={{ fontSize: 12, color: "#94a3b8" }}>Loading...</div>
+            ) : (
+              <form onSubmit={handleProfileSave} style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Display Name</label>
+                  <input value={profileName} onChange={(e) => setProfileName(e.target.value)} required
+                    style={{ padding: "7px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, width: 220 }} />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Username</label>
+                  <input value={currentUser?.username || ""} disabled
+                    style={{ padding: "7px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, width: 160, background: "#f8fafc", color: "#94a3b8" }} />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Role</label>
+                  <input value={currentUser?.role || ""} disabled
+                    style={{ padding: "7px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, width: 140, background: "#f8fafc", color: "#94a3b8" }} />
+                </div>
+                <button type="submit" disabled={profileState.status === "saving"} style={{ padding: "8px 16px", background: "#2563eb", color: "white", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: profileState.status === "saving" ? "default" : "pointer" }}>
+                  {profileState.status === "saving" ? "Saving..." : "Save"}
+                </button>
+                {profileState.status === "success" && <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 600 }}>Saved — refreshing...</span>}
+                {profileState.status === "error" && <span style={{ fontSize: 11, color: "#dc2626" }}>{profileState.message}</span>}
+              </form>
+            )}
+            <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 8 }}>
+              Username, role, and password can only be changed by an Admin (Team Access below, if you're an Admin).
             </div>
           </div>
 
