@@ -5,6 +5,7 @@ import { Users, Shield, Building2, Bell, CheckCircle, DollarSign, Grid3X3, UserP
 import { useState, useEffect, useCallback } from "react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import AddUserModal from "@/components/AddUserModal";
+import PayrollSettingsSection from "@/components/PayrollSettingsSection";
 
 const roles = [
   { role:"Corporate Admin",  users:2, access:"Full access all properties" },
@@ -149,6 +150,10 @@ export default function SettingsPage() {
               <button style={{ marginTop:6,background:"#2563eb",color:"white",border:"none",borderRadius:5,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer" }}>Save Changes</button>
             </div>
           </div>
+
+          {/* Payroll Settings — per-state burden rate overrides, Admin-only */}
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: -4 }}>Payroll Settings</div>
+          <PayrollSettingsSection canEdit={currentUser?.role === "Admin"} />
 
           {/* Team Access — real self-service user management, Admin-only */}
           <div style={{ background:"white",borderRadius:8,border:"1px solid #e2e8f0",overflow:"hidden" }}>

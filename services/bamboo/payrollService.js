@@ -1,9 +1,10 @@
 import { bambooGet, bambooPost, BambooHRError } from "@/lib/bamboohr/client";
 import { cached } from "@/lib/bamboohr/cache";
 import { fetchAllPtoBalances } from "@/services/bamboo/timeOffService";
-import { getTipsCollection, getBonusesCollection } from "@/lib/db/collections";
+import { getTipsCollection, getBonusesCollection, getStateBurdenRatesCollection, getPropertyStatesCollection } from "@/lib/db/collections";
 import {
   burdenRateFor,
+  resolveBurdenRate,
   departmentGroupFor,
   computeLaborCost,
   round2,
@@ -378,6 +379,7 @@ export async function getPayrollTrend({ end: endISO, weeks = 6 } = {}) {
   weekOfEndMonday.setDate(endDate.getDate() + diffToMonday);
 
   const { employees: directory } = await cached("directory-only", fetchDirectoryWithCompensation);
+  const { propertyStateMap, stateBurdenMap } = await fetchPayrollSettingsMaps();
 
   const weekRanges = Array.from({ length: weeks }, (_, i) => {
     const offset = weeks - 1 - i; // oldest first
@@ -395,7 +397,7 @@ export async function getPayrollTrend({ end: endISO, weeks = 6 } = {}) {
 
         const employeeCosts = directory.map((e) => {
           const hours = hoursByEmployee.get(String(e.id)) || { regularHours: 0, otHours: 0, holidayHours: 0, holidayCostWeight: 0 };
-          const burden = burdenRateFor(e.departmentGroup);
+          const burden = resolveBurdenRate({ location: e.location, departmentGroup: e.departmentGroup, propertyStateMap, stateBurdenMap });
           const holidayCostOverride = round2((hours.holidayCostWeight || 0) * e.baseRate * (1 + burden));
           const cost = computeLaborCost({ baseRate: e.baseRate, burden, ...hours, holidayCostOverride });
           return {
@@ -432,6 +434,25 @@ export async function getPayrollTrend({ end: endISO, weeks = 6 } = {}) {
  * and exact weekStart. Degrades to empty maps on any DB error rather
  * than breaking payroll.
  */
+/**
+ * Fetches the configured property→state assignments and state burden
+ * rates once, as plain Maps, for use with resolveBurdenRate() across an
+ * entire employee list — avoids a DB round-trip per employee. Degrades
+ * to empty maps (meaning: fall back to department-group burden for
+ * everyone) on any DB error.
+ */
+async function fetchPayrollSettingsMaps() {
+  try {
+    const [statesCol, ratesCol] = await Promise.all([getPropertyStatesCollection(), getStateBurdenRatesCollection()]);
+    const [propertyStates, stateRates] = await Promise.all([statesCol.find({}).toArray(), ratesCol.find({}).toArray()]);
+    const propertyStateMap = new Map(propertyStates.map((p) => [p.property, p.state]));
+    const stateBurdenMap = new Map(stateRates.map((r) => [r.state, r.burdenPct]));
+    return { propertyStateMap, stateBurdenMap };
+  } catch {
+    return { propertyStateMap: new Map(), stateBurdenMap: new Map() };
+  }
+}
+
 async function fetchSupplementalPay(weekStartISO) {
   try {
     const [tipsCol, bonusCol] = await Promise.all([getTipsCollection(), getBonusesCollection()]);
@@ -469,6 +490,7 @@ export async function getPayrollDataset({ start: startISO, end: endISO } = {}) {
     );
 
     const { tipsByEmployee, bonusByEmployee } = await fetchSupplementalPay(start.toISOString().slice(0, 10));
+    const { propertyStateMap, stateBurdenMap } = await fetchPayrollSettingsMaps();
 
     const employees = active.map((e) => {
       const hours = hoursByEmployee.get(String(e.id)) || {
@@ -482,7 +504,7 @@ export async function getPayrollDataset({ start: startISO, end: endISO } = {}) {
         ptoUsed: 0,
         ptoBalance: 0,
       };
-      const burden = burdenRateFor(e.departmentGroup);
+      const burden = resolveBurdenRate({ location: e.location, departmentGroup: e.departmentGroup, propertyStateMap, stateBurdenMap });
       // holidayCostWeight is "hours already scaled by their applicable
       // multiplier" (1.5x for hours worked on a MULTIPLIER holiday, 1x for
       // a HOURS_BY_STATUS fixed allotment) — multiply by this employee's
