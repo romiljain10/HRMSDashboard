@@ -30,6 +30,11 @@ export async function PATCH(request, { params }) {
 
   if (body.name !== undefined) update.name = body.name;
 
+  if (body.property !== undefined) {
+    // Empty string / null both mean "no restriction" — full access.
+    update.property = body.property || null;
+  }
+
   if (body.role !== undefined) {
     if (!ROLES.includes(body.role)) {
       return NextResponse.json({ error: `Invalid role. Must be one of: ${ROLES.join(", ")}` }, { status: 400 });

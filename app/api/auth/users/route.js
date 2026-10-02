@@ -15,6 +15,7 @@ export async function GET() {
         username: u.username,
         name: u.name,
         role: u.role,
+        property: u.property || null,
         active: u.active,
         createdAt: u.createdAt,
         createdBy: u.createdBy,

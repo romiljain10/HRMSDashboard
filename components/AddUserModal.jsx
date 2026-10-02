@@ -1,12 +1,17 @@
 "use client";
 import { useState } from "react";
 import { X, UserPlus } from "lucide-react";
+import { useFilteredPayrollDataset } from "@/hooks/useFilteredPayrollDataset";
 
 export default function AddUserModal({ onClose, onCreated }) {
+  const { locations } = useFilteredPayrollDataset();
+  const realLocations = locations.filter((l) => l !== "All Locations");
+
   const [username, setUsername] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("Viewer");
+  const [property, setProperty] = useState(""); // "" = full access
   const [state, setState] = useState({ status: "idle" });
 
   async function handleSubmit(e) {
@@ -16,7 +21,7 @@ export default function AddUserModal({ onClose, onCreated }) {
       const res = await fetch("/api/auth/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, name, password, role }),
+        body: JSON.stringify({ username, name, password, role, property: property || null }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -63,6 +68,14 @@ export default function AddUserModal({ onClose, onCreated }) {
               <option value="Payroll Manager">Payroll Manager</option>
               <option value="Viewer">Viewer</option>
             </select>
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Property Access</label>
+            <select value={property} onChange={(e) => setProperty(e.target.value)} style={{ width: "100%", padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12 }}>
+              <option value="">All Properties</option>
+              {realLocations.map((loc) => <option key={loc} value={loc}>{loc} only</option>)}
+            </select>
+            <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>Restricting to one property hides every other property's data for this account — enforced on every page.</div>
           </div>
 
           {state.status === "error" && (

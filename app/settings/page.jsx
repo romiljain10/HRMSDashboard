@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import AddUserModal from "@/components/AddUserModal";
 import PayrollSettingsSection from "@/components/PayrollSettingsSection";
+import { useFilteredPayrollDataset } from "@/hooks/useFilteredPayrollDataset";
 
 const roles = [
   { role:"Corporate Admin",  users:2, access:"Full access all properties" },
@@ -57,6 +58,8 @@ const payrollSettings = [
 
 export default function SettingsPage() {
   const { user: currentUser, loading: userLoading } = useCurrentUser();
+  const { locations } = useFilteredPayrollDataset();
+  const realLocations = locations.filter((l) => l !== "All Locations");
   const [teamUsers, setTeamUsers] = useState([]);
   const [usersError, setUsersError] = useState("");
   const [usersLoading, setUsersLoading] = useState(true);
@@ -118,6 +121,18 @@ export default function SettingsPage() {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ role: newRole }),
+    });
+    const json = await res.json();
+    if (!res.ok) setActionError(json.error);
+    loadUsers();
+  }
+
+  async function handlePropertyChange(user, newProperty) {
+    setActionError("");
+    const res = await fetch(`/api/auth/users/${user.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ property: newProperty || null }),
     });
     const json = await res.json();
     if (!res.ok) setActionError(json.error);
@@ -243,7 +258,7 @@ export default function SettingsPage() {
             <div className="table-scroll">
               <table style={{ width:"100%",borderCollapse:"collapse",minWidth:420 }}>
                 <thead><tr style={{ background:"#f8fafc" }}>
-                  {["Name","Username","Role","Status",""].map(h=><th key={h} style={{ padding:"7px 14px",textAlign:"left",fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase" }}>{h}</th>)}
+                  {["Name","Username","Role","Property","Status",""].map(h=><th key={h} style={{ padding:"7px 14px",textAlign:"left",fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase" }}>{h}</th>)}
                 </tr></thead>
                 <tbody>
                   {teamUsers.map((u)=>(
@@ -256,6 +271,13 @@ export default function SettingsPage() {
                           <option value="Admin">Admin</option>
                           <option value="Payroll Manager">Payroll Manager</option>
                           <option value="Viewer">Viewer</option>
+                        </select>
+                      </td>
+                      <td style={{ padding:"8px 14px",fontSize:11 }}>
+                        <select value={u.property || ""} onChange={(e) => handlePropertyChange(u, e.target.value)}
+                          style={{ background: u.property ? "#fef2f2" : "#f1f5f9", color: u.property ? "#b91c1c" : "#64748b", padding:"2px 6px", borderRadius:4, fontWeight:600, border:"none", fontSize:11 }}>
+                          <option value="">All Properties</option>
+                          {realLocations.map((loc) => <option key={loc} value={loc}>{loc}</option>)}
                         </select>
                       </td>
                       <td style={{ padding:"8px 14px",fontSize:11 }}>

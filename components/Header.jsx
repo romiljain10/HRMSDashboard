@@ -13,7 +13,7 @@ import { useWeeklyTips } from "@/hooks/useWeeklyTips";
 
 export default function Header({ title, subtitle, locations }) {
   const router = useRouter();
-  const { location, setLocation } = useLocationFilter();
+  const { location, setLocation, isLocationLocked } = useLocationFilter();
   const { start, end, setDateRange, resetToCurrentWeek } = useDateRange();
   const [pickerOpen, setPickerOpen] = useState(false);
   const options = locations && locations.length ? locations : ["All Locations"];
@@ -110,16 +110,18 @@ export default function Header({ title, subtitle, locations }) {
           <select
             value={location}
             onChange={(e) => setLocation(e.target.value)}
+            disabled={isLocationLocked}
+            title={isLocationLocked ? "Your account is restricted to this property" : undefined}
             style={{
               paddingLeft: 24, paddingRight: 22, paddingTop: 5, paddingBottom: 5,
               border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 11, fontWeight: 600,
-              background: "#f8fafc", outline: "none", color: "#0f172a", appearance: "none",
-              maxWidth: 160, cursor: "pointer",
+              background: isLocationLocked ? "#f1f5f9" : "#f8fafc", outline: "none", color: isLocationLocked ? "#94a3b8" : "#0f172a", appearance: "none",
+              maxWidth: 160, cursor: isLocationLocked ? "default" : "pointer",
             }}
           >
-            {options.map((loc) => <option key={loc} value={loc}>{loc}</option>)}
+            {(isLocationLocked ? [location] : options).map((loc) => <option key={loc} value={loc}>{loc}</option>)}
           </select>
-          <ChevronDown size={11} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", color: "#64748b", pointerEvents: "none" }} />
+          {!isLocationLocked && <ChevronDown size={11} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", color: "#64748b", pointerEvents: "none" }} />}
         </div>
 
         {/* Search — hidden on mobile, real: employees + departments + reports */}

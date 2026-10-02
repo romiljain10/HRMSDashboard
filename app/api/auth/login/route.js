@@ -17,7 +17,7 @@ export async function POST(request) {
   try {
     await ensureUsersImported();
     const dbUser = await findDbUser(username, password);
-    if (dbUser) user = { username: dbUser.username, name: dbUser.name, role: dbUser.role };
+    if (dbUser) user = { username: dbUser.username, name: dbUser.name, role: dbUser.role, property: dbUser.property || null };
   } catch {
     // Fall through to the legacy check below.
   }
@@ -30,7 +30,9 @@ export async function POST(request) {
       );
     }
     const legacyUser = findUser(username, password);
-    if (legacyUser) user = { username: legacyUser.username, name: legacyUser.name, role: legacyUser.role };
+    // Legacy env-based accounts (USERS_JSON/ADMIN_PASSWORD) have no
+    // property-restriction concept — they always get full access.
+    if (legacyUser) user = { username: legacyUser.username, name: legacyUser.name, role: legacyUser.role, property: null };
   }
 
   if (!user) {

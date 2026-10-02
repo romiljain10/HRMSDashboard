@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireRole } from "@/lib/session";
+import { requireRole, resolveAllowedProperty } from "@/lib/session";
 import { getRevenueSnapshotsCollection } from "@/lib/db/collections";
 
 export async function GET(request) {
@@ -7,7 +7,7 @@ export async function GET(request) {
   if (session instanceof NextResponse) return session;
 
   const { searchParams } = new URL(request.url);
-  const property = searchParams.get("property");
+  const property = resolveAllowedProperty(session, searchParams.get("property"));
 
   try {
     const collection = await getRevenueSnapshotsCollection();
