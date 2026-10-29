@@ -5,6 +5,8 @@ import { getSession, resolveAllowedProperty } from "@/lib/session";
 import { buildDepartmentTotals, buildBurdenByDepartment, buildCurrentPeriodTotals } from "@/lib/payroll/aggregates";
 import { round2 } from "@/lib/payroll/config";
 
+export const maxDuration = 60; // BambooHR fan-out can exceed the default limit
+
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);

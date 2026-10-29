@@ -224,13 +224,13 @@ export default function PayrollPage() {
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
               <thead>
                 <tr style={{ background: "#f8fafc" }}>
-                  {["Employee","Title","Dept","Reg Hrs","OT Hrs","Holiday Hrs","Base Rate","Payroll Cost, Tax, Benefits, and Workers Comp","RT Rate","OT Rate","Payroll Costs","Tips","Bonus","Total Costs","Approval"].map(h => (
-                    <th key={h} style={{ textAlign: ["Reg Hrs","OT Hrs","Holiday Hrs","Base Rate","Payroll Cost, Tax, Benefits, and Workers Comp","RT Rate","OT Rate","Payroll Costs","Tips","Bonus","Total Costs"].includes(h) ? "right" : "left", padding: "7px 10px", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", whiteSpace: h === "Payroll Cost, Tax, Benefits, and Workers Comp" ? "normal" : "nowrap", maxWidth: h === "Payroll Cost, Tax, Benefits, and Workers Comp" ? 90 : undefined }}>{h}</th>
+                  {["Employee","Title","Dept","Reg Hrs","OT Hrs","Holiday Hrs","PTO Hrs","Base Rate","Payroll Cost, Tax, Benefits, and Workers Comp","RT Rate","OT Rate","Payroll Costs","Tips","Bonus","Total Costs","Approval"].map(h => (
+                    <th key={h} style={{ textAlign: ["Reg Hrs","OT Hrs","Holiday Hrs","PTO Hrs","Base Rate","Payroll Cost, Tax, Benefits, and Workers Comp","RT Rate","OT Rate","Payroll Costs","Tips","Bonus","Total Costs"].includes(h) ? "right" : "left", padding: "7px 10px", fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", whiteSpace: h === "Payroll Cost, Tax, Benefits, and Workers Comp" ? "normal" : "nowrap", maxWidth: h === "Payroll Cost, Tax, Benefits, and Workers Comp" ? 90 : undefined }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {loading ? <SkeletonTableRows cols={15} rows={8} /> : filtered.map((e) => (
+                {loading ? <SkeletonTableRows cols={16} rows={8} /> : filtered.map((e) => (
                   <tr key={e.id} style={{ borderBottom: "1px solid #f8fafc", opacity: e.totalCost === 0 ? 0.6 : 1 }}>
                     <td style={{ padding: "8px 10px" }}>
                       <div style={{ fontWeight: 600, fontSize: 12, color: "#0f172a", whiteSpace: "nowrap" }}>{e.name}</div>
@@ -243,6 +243,7 @@ export default function PayrollPage() {
                     <td style={{ padding: "8px 10px", textAlign: "right", fontSize: 12 }}>{e.regularHours.toFixed(2)}</td>
                     <td style={{ padding: "8px 10px", textAlign: "right", fontSize: 12, color: e.otHours > 0 ? "#dc2626" : "#94a3b8", fontWeight: e.otHours > 0 ? 700 : 400 }}>{e.otHours.toFixed(2)}</td>
                     <td style={{ padding: "8px 10px", textAlign: "right", fontSize: 12, color: e.holidayHours > 0 ? "#d97706" : "#94a3b8", fontWeight: e.holidayHours > 0 ? 700 : 400 }}>{e.holidayHours.toFixed(2)}</td>
+                    <td style={{ padding: "8px 10px", textAlign: "right", fontSize: 12, color: (e.ptoHours ?? e.ptoUsed) > 0 ? "#7c3aed" : "#94a3b8", fontWeight: (e.ptoHours ?? e.ptoUsed) > 0 ? 700 : 400 }}>{Number(e.ptoHours ?? e.ptoUsed ?? 0).toFixed(2)}</td>
                     <td style={{ padding: "8px 10px", textAlign: "right", fontSize: 12 }}>${e.baseRate.toFixed(2)}</td>
                     <td style={{ padding: "8px 10px", textAlign: "right", fontSize: 12 }}>{(e.burden * 100).toFixed(1)}%</td>
                     <td style={{ padding: "8px 10px", textAlign: "right", fontSize: 11, color: "#475569" }}>${e.fullyLoadedRT.toFixed(4)}</td>

@@ -1,6 +1,6 @@
 import { bambooGet, bambooPost, BambooHRError } from "@/lib/bamboohr/client";
 import { cached } from "@/lib/bamboohr/cache";
-import { fetchAllPtoBalances } from "@/services/bamboo/timeOffService";
+import { fetchAllPtoBalances, fetchPtoUsedInPeriod } from "@/services/bamboo/timeOffService";
 import { getTipsCollection, getBonusesCollection, getStateBurdenRatesCollection, getPropertyStatesCollection } from "@/lib/db/collections";
 import {
   burdenRateFor,
@@ -489,6 +489,10 @@ export async function getPayrollDataset({ start: startISO, end: endISO } = {}) {
       end.toISOString().slice(0, 10)
     );
 
+    // PTO hours actually taken in the selected period (one API call). If it
+    // fails we fall back to the calculator's "used" figure so nothing breaks.
+    const ptoPeriod = await fetchPtoUsedInPeriod(start.toISOString().slice(0, 10), end.toISOString().slice(0, 10));
+
     const { tipsByEmployee, bonusByEmployee } = await fetchSupplementalPay(start.toISOString().slice(0, 10));
     const { propertyStateMap, stateBurdenMap } = await fetchPayrollSettingsMaps();
 
@@ -520,7 +524,8 @@ export async function getPayrollDataset({ start: startISO, end: endISO } = {}) {
       // PTO used is paid at the employee's fully-loaded regular rate — not
       // a special PTO multiplier, since BambooHR doesn't expose one and
       // straight-rate PTO pay is the standard default.
-      const ptoCost = round2(pto.ptoUsed * cost.fullyLoadedRT);
+      const ptoHours = ptoPeriod ? round2(ptoPeriod.get(String(e.id)) || 0) : pto.ptoUsed;
+      const ptoCost = round2(ptoHours * cost.fullyLoadedRT);
 
       // Gratuity/Bonus, matched per-employee from the Revenue page's
       // uploads (see fetchSupplementalPay) — already burden-inclusive
@@ -537,6 +542,7 @@ export async function getPayrollDataset({ start: startISO, end: endISO } = {}) {
         ...pto,
         burden,
         ...cost,
+        ptoHours,
         ptoCost,
         tips,
         bonus,

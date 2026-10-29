@@ -63,3 +63,36 @@ export async function fetchAllPtoBalances(employeeIds, asOfDate) {
 
   return { balances: results, live: !anyFailure };
 }
+
+/**
+ * PTO actually taken inside [startISO, endISO] — one company-wide request
+ * (approved requests only) instead of one call per employee. Returns a Map
+ * of employeeId -> hours, or null if the call failed (caller falls back to
+ * the calculator's "used" figure).
+ */
+export async function fetchPtoUsedInPeriod(startISO, endISO) {
+  try {
+    const data = await bambooGet("/time_off/requests/", { start: startISO, end: endISO, status: "approved" });
+    const list = Array.isArray(data) ? data : [];
+    const hoursByEmployee = new Map();
+    for (const r of list) {
+      const id = String(r.employeeId ?? "");
+      if (!id) continue;
+      const unit = String(r.amount?.unit ?? "hours").toLowerCase();
+      const perUnit = unit.startsWith("day") ? 8 : 1; // days -> 8h standard day
+      let hours = 0;
+      if (r.dates && typeof r.dates === "object") {
+        // per-day breakdown: only count days inside the selected period
+        for (const [day, amt] of Object.entries(r.dates)) {
+          if (day >= startISO && day <= endISO) hours += Number(amt || 0) * perUnit;
+        }
+      } else if (r.start >= startISO && r.end <= endISO) {
+        hours = Number(r.amount?.amount || 0) * perUnit;
+      }
+      if (hours > 0) hoursByEmployee.set(id, (hoursByEmployee.get(id) || 0) + hours);
+    }
+    return hoursByEmployee;
+  } catch {
+    return null;
+  }
+}
