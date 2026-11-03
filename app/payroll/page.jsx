@@ -57,7 +57,7 @@ export default function PayrollPage() {
     return matchSearch && matchDept;
   });
 
-  const totalPayroll = filtered.reduce((s, e) => s + e.totalCost + (e.ptoCost || 0), 0);
+  const totalPayroll = filtered.reduce((s, e) => s + (e.payrollCost ?? e.totalCost + (e.ptoCost || 0)), 0);
   const totalTips = filtered.reduce((s, e) => s + (e.tips || 0), 0);
   const totalBonus = filtered.reduce((s, e) => s + (e.bonus || 0), 0);
   const totalGrandCost = filtered.reduce((s, e) => s + (e.grandTotalCost || e.totalCost || 0), 0);
@@ -248,8 +248,8 @@ export default function PayrollPage() {
                     <td style={{ padding: "8px 10px", textAlign: "right", fontSize: 12 }}>{(e.burden * 100).toFixed(1)}%</td>
                     <td style={{ padding: "8px 10px", textAlign: "right", fontSize: 11, color: "#475569" }}>${e.fullyLoadedRT.toFixed(4)}</td>
                     <td style={{ padding: "8px 10px", textAlign: "right", fontSize: 11, color: "#475569" }}>${e.fullyLoadedOT.toFixed(4)}</td>
-                    <td style={{ padding: "8px 10px", textAlign: "right", fontSize: 12, fontWeight: 700, color: e.totalCost > 0 ? "#0f172a" : "#94a3b8" }}>
-                      {e.totalCost > 0 ? "$" + e.totalCost.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—"}
+                    <td style={{ padding: "8px 10px", textAlign: "right", fontSize: 12, fontWeight: 700, color: (e.payrollCost ?? e.totalCost) > 0 ? "#0f172a" : "#94a3b8" }}>
+                      {(e.payrollCost ?? e.totalCost) > 0 ? "$" + (e.payrollCost ?? e.totalCost).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—"}
                     </td>
                     <td style={{ padding: "8px 10px", textAlign: "right", fontSize: 12, color: e.tips > 0 ? "#059669" : "#94a3b8" }}>
                       {e.tips > 0 ? "$" + e.tips.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—"}

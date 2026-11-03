@@ -515,17 +515,18 @@ export async function getPayrollDataset({ start: startISO, end: endISO } = {}) {
       // own rate to get the real dollar cost, since different holidays in
       // the same period can have different pay modes/multipliers.
       const holidayCostOverride = round2((hours.holidayCostWeight || 0) * e.baseRate * (1 + burden));
+      const ptoHours = ptoPeriod ? round2(ptoPeriod.get(String(e.id)) || 0) : pto.ptoUsed;
       const cost = computeLaborCost({
         baseRate: e.baseRate,
         burden,
         ...hours,
         holidayCostOverride,
+        ptoHours,
       });
       // PTO used is paid at the employee's fully-loaded regular rate — not
       // a special PTO multiplier, since BambooHR doesn't expose one and
       // straight-rate PTO pay is the standard default.
-      const ptoHours = ptoPeriod ? round2(ptoPeriod.get(String(e.id)) || 0) : pto.ptoUsed;
-      const ptoCost = round2(ptoHours * cost.fullyLoadedRT);
+      const ptoCost = cost.ptoCost;
 
       // Gratuity/Bonus, matched per-employee from the Revenue page's
       // uploads (see fetchSupplementalPay) — already burden-inclusive
@@ -534,7 +535,7 @@ export async function getPayrollDataset({ start: startISO, end: endISO } = {}) {
       const bonus = round2(bonusByEmployee.get(String(e.id)) || 0);
       // "Payroll Costs" (cost.totalCost, the hours-based labor cost) +
       // Tips + Bonus = "Total Costs".
-      const grandTotalCost = round2(cost.totalCost + tips + bonus);
+      const grandTotalCost = round2(cost.payrollCost + tips + bonus); // hours + PTO + tips + bonus
 
       return {
         ...e,
