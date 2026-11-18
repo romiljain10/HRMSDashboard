@@ -1,4 +1,11 @@
-import { makeListCreateHandlers } from "@/lib/weeklyAmount/routeHandlers";
-import { getBonusesCollection } from "@/lib/db/collections";
+import { makeTemplateHandler } from "@/lib/weeklyAmount/routeHandlers";
 
-export const { GET, POST } = makeListCreateHandlers({ getCollection: getBonusesCollection });
+export const GET = makeTemplateHandler({
+  amountLabel: "Bonus Amount ($)",
+  sheetName: "Bonus Data",
+  exampleRows: [
+    { employeeName: "John Smith", amount: 200 },
+    { employeeName: "Sam", amount: 150 },
+  ],
+  fileLabel: "Bonus",
+});

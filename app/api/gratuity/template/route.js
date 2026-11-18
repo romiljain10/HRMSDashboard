@@ -1,7 +1,7 @@
 import { makeTemplateHandler } from "@/lib/weeklyAmount/routeHandlers";
 
 export const GET = makeTemplateHandler({
-  amountLabel: "Tip Amount",
+  amountLabel: "Gratuity Amount ($)",
   sheetName: "Gratuity Data",
   exampleRows: [
     { employeeName: "John Smith", amount: 100 },
